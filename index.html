@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Machine Timeline Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header>
+        <h1>Machine Timeline Dashboard</h1>
+        <p>
+          Laad één of meerdere <code>timeline.csv</code>-bestanden in. Dubbele bestanden
+          worden automatisch geweigerd.
+        </p>
+      </header>
+
+      <section class="panel uploader">
+        <label for="fileInput" class="button">Kies CSV-bestand(en)</label>
+        <input id="fileInput" type="file" accept=".csv,text/csv" multiple />
+        <button id="clearBtn" class="button secondary" type="button">Leeg dataset</button>
+        <p id="status" class="status">Nog geen bestanden geladen.</p>
+        <ul id="loadedFiles" class="loaded-files"></ul>
+      </section>
+
+      <section class="panel" id="summaryPanel">
+        <h2>Overzicht</h2>
+        <div id="summaryCards" class="cards"></div>
+      </section>
+
+      <section class="panel" id="jobPanel">
+        <h2>Efficiëntie per job</h2>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Uptime</th>
+                <th>Downtime</th>
+                <th>Efficiëntie</th>
+                <th>Belangrijkste downtime oorzaak</th>
+              </tr>
+            </thead>
+            <tbody id="jobTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="crossSectionPanel">
+        <h2>Dwarsdoorsnede per job</h2>
+        <label for="jobSelect">Selecteer job:</label>
+        <select id="jobSelect"></select>
+        <div id="selectedJobStats"></div>
+        <h3>Downtime oorzaken</h3>
+        <div id="reasonBreakdown"></div>
+      </section>
+    </main>
+
+    <script src="script.js" type="module"></script>
+  </body>
+</html>
