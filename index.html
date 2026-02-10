@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Machine Timeline Dashboard</title>
+    <style>
+      :root {
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        color: #18212f;
+        background: #eef2f7;
+      }
+      body { margin: 0; }
+      .container { max-width: 1200px; margin: 0 auto; padding: 2rem 1rem 3rem; }
+      h1,h2,h3 { margin-top: 0; }
+      .panel { background: #fff; border-radius: 14px; padding: 1rem; margin-top: 1rem; box-shadow: 0 2px 10px rgba(20,35,59,0.08); }
+      .uploader { display: grid; gap: .75rem; }
+      .button { border: none; background: #1768ff; color: #fff; border-radius: 8px; padding: .65rem .9rem; font-weight: 600; cursor: pointer; width: fit-content; }
+      .button.secondary { background: #425466; }
+      #fileInput { display: none; }
+      .status,.muted { color: #4f6478; margin: 0; }
+      .loaded-files { margin: 0; padding-left: 1rem; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .75rem; }
+      .card { background: #f5f8fe; border: 1px solid #dbe4f1; border-radius: 10px; padding: .8rem; }
+      .card strong { display: block; margin-top: .3rem; font-size: 1.1rem; }
+      .table-wrapper { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; }
+      th,td { text-align: left; border-bottom: 1px solid #e5eaf2; padding: .55rem; vertical-align: top; }
+      .progress { width: 100%; height: 12px; background: #eff3f9; border-radius: 999px; overflow: hidden; }
+      .progress > span { display: block; height: 100%; background: linear-gradient(90deg,#2a7bff,#23c29f); }
+      .reason-row { display:grid; grid-template-columns: 1fr 80px; align-items: center; gap:.75rem; margin-bottom:.5rem; }
+      #jobSelect { margin: .5rem 0 1rem; padding: .5rem; }
+      .meta { display:flex; flex-wrap:wrap; gap:.5rem; }
+      .pill { padding:.2rem .55rem; border-radius:999px; background:#eaf1ff; color:#275299; font-size:.8rem; font-weight:600; }
+      .tip { margin:0; font-size:.92rem; color:#4a5f74; }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <header>
+        <h1>Machine Timeline Dashboard</h1>
+        <p>Laad zowel <code>Timeline CSV</code> als <code>JobStatistics CSV</code> in. Dubbele bestanden worden automatisch geweigerd.</p>
+      </header>
+
+      <section class="panel uploader">
+        <label for="fileInput" class="button">Kies CSV-bestand(en)</label>
+        <input id="fileInput" type="file" accept=".csv,text/csv" multiple />
+        <button id="clearBtn" class="button secondary" type="button">Leeg dataset</button>
+        <p class="tip">Je kunt deze pagina direct openen via dubbelklik op <code>index.html</code>.</p>
+        <p id="status" class="status">Nog geen bestanden geladen.</p>
+        <div id="fileTypeInfo" class="meta"></div>
+        <ul id="loadedFiles" class="loaded-files"></ul>
+      </section>
+
+      <section class="panel">
+        <h2>Overzicht</h2>
+        <div id="summaryCards" class="cards"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Efficiëntie per job</h2>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Uptime (timeline)</th>
+                <th>Downtime (timeline)</th>
+                <th>Efficiëntie (timeline)</th>
+                <th>Total Pieces</th>
+                <th>Good/Reject</th>
+                <th>Production Rate</th>
+                <th>Belangrijkste downtime oorzaak</th>
+              </tr>
+            </thead>
+            <tbody id="jobTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Dwarsdoorsnede per job</h2>
+        <label for="jobSelect">Selecteer job:</label>
+        <select id="jobSelect"></select>
+        <div id="selectedJobStats"></div>
+        <h3>Downtime oorzaken (timeline)</h3>
+        <div id="reasonBreakdown"></div>
+      </section>
+    </main>
+
+    <script>
+      const els = {
+        fileInput: document.getElementById('fileInput'),
+        clearBtn: document.getElementById('clearBtn'),
+        status: document.getElementById('status'),
+        fileTypeInfo: document.getElementById('fileTypeInfo'),
+        loadedFiles: document.getElementById('loadedFiles'),
+        summaryCards: document.getElementById('summaryCards'),
+        jobTableBody: document.getElementById('jobTableBody'),
+        jobSelect: document.getElementById('jobSelect'),
+        selectedJobStats: document.getElementById('selectedJobStats'),
+        reasonBreakdown: document.getElementById('reasonBreakdown')
+      };
+
+      const state = {
+        signatures: new Set(),
+        loadedFiles: [],
+        timelineEvents: [],
+        jobStatisticsRows: []
+      };
+
+      const HEADERS = {
+        timeline: 'start time,shift id,production state,reason,duration,job name',
+        jobStats: 'job start time,job end time,job name,current user,additional data,total pieces,good pieces,reject pieces,bad piece rate,total time,scheduled downtime,unscheduled downtime,uptime,good production time,nominal production time,nominal production time rate,scheduled downtime rate,unscheduled downtime rate,production rate,shift name'
+      };
+
+      els.fileInput.addEventListener('change', async (event) => {
+        const files = Array.from(event.target.files || []);
+        if (files.length === 0) return;
+
+        let added = 0;
+        let duplicates = 0;
+        let unsupported = 0;
+
+        for (const file of files) {
+          const content = await file.text();
+          const signature = await getSignature(content);
+          if (state.signatures.has(signature)) { duplicates += 1; continue; }
+
+          const parsed = parseCsvByType(content);
+          if (parsed.type === 'unknown') { unsupported += 1; continue; }
+
+          state.signatures.add(signature);
+          state.loadedFiles.push({ name: file.name, type: parsed.type });
+          if (parsed.type === 'timeline') state.timelineEvents.push(...parsed.rows);
+          if (parsed.type === 'jobStats') state.jobStatisticsRows.push(...parsed.rows);
+          added += 1;
+        }
+
+        event.target.value = '';
+        render({ added, duplicates, unsupported });
+      });
+
+      els.clearBtn.addEventListener('click', () => {
+        state.signatures.clear();
+        state.loadedFiles = [];
+        state.timelineEvents = [];
+        state.jobStatisticsRows = [];
+        render({ added: 0, duplicates: 0, unsupported: 0 });
+      });
+
+      els.jobSelect.addEventListener('change', () => renderCrossSection(els.jobSelect.value));
+
+      function splitCsvLine(line) { return line.split(','); }
+
+      function parseCsvByType(raw) {
+        const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        const normalized = lines.map((l) => l.toLowerCase());
+
+        const timelineIdx = normalized.findIndex((l) => l.startsWith(HEADERS.timeline));
+        if (timelineIdx !== -1) {
+          const rows = lines.slice(timelineIdx + 1).map((line) => {
+            const [startTime, shiftId, productionState, reason, duration, jobName] = splitCsvLine(line);
+            return {
+              startTime,
+              shiftId,
+              productionState,
+              reason: reason || 'Onbekend',
+              durationSeconds: durationToSeconds(duration),
+              jobName
+            };
+          }).filter((r) => r.jobName);
+          return { type: 'timeline', rows };
+        }
+
+        const jobIdx = normalized.findIndex((l) => l.startsWith(HEADERS.jobStats));
+        if (jobIdx !== -1) {
+          const rows = lines.slice(jobIdx + 1).map((line) => {
+            const [jobStartTime, jobEndTime, jobName, currentUser, additionalData, totalPieces, goodPieces, rejectPieces, badPieceRate, totalTime, scheduledDowntime, unscheduledDowntime, uptime, goodProductionTime, nominalProductionTime, nominalProductionTimeRate, scheduledDowntimeRate, unscheduledDowntimeRate, productionRate, shiftName] = splitCsvLine(line);
+            return {
+              jobStartTime, jobEndTime, jobName,
+              currentUser, additionalData,
+              totalPieces: Number(totalPieces || 0),
+              goodPieces: Number(goodPieces || 0),
+              rejectPieces: Number(rejectPieces || 0),
+              badPieceRate: Number(badPieceRate || 0),
+              totalTimeSeconds: durationToSeconds(totalTime),
+              scheduledDowntimeSeconds: durationToSeconds(scheduledDowntime),
+              unscheduledDowntimeSeconds: durationToSeconds(unscheduledDowntime),
+              uptimeSeconds: durationToSeconds(uptime),
+              goodProductionTimeSeconds: durationToSeconds(goodProductionTime),
+              nominalProductionTimeSeconds: durationToSeconds(nominalProductionTime),
+              nominalProductionTimeRate: Number(nominalProductionTimeRate || 0),
+              scheduledDowntimeRate: Number(scheduledDowntimeRate || 0),
+              unscheduledDowntimeRate: Number(unscheduledDowntimeRate || 0),
+              productionRate: Number(productionRate || 0),
+              shiftName
+            };
+          }).filter((r) => r.jobName);
+          return { type: 'jobStats', rows };
+        }
+
+        return { type: 'unknown', rows: [] };
+      }
+
+      async function getSignature(text) {
+        const data = new TextEncoder().encode(text);
+        if (window.crypto && window.crypto.subtle) {
+          const digest = await window.crypto.subtle.digest('SHA-256', data);
+          return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+        }
+        let hash = 0;
+        for (const byte of data) hash = (hash * 31 + byte) >>> 0;
+        return String(hash);
+      }
+
+      function durationToSeconds(value) {
+        const parts = (value || '').split(':').map(Number);
+        if (parts.length !== 3 || parts.some(Number.isNaN)) return 0;
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      }
+
+      function formatDuration(seconds) {
+        const s = Math.max(0, Math.floor(seconds || 0));
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+      }
+
+      function aggregateByJob() {
+        const byJob = new Map();
+        const ensure = (jobName) => {
+          if (!byJob.has(jobName)) {
+            byJob.set(jobName, {
+              jobName,
+              timeline: { uptimeSeconds: 0, downtimeSeconds: 0, reasons: new Map() },
+              stats: {
+                totalPieces: 0, goodPieces: 0, rejectPieces: 0,
+                totalTimeSeconds: 0, uptimeSeconds: 0, scheduledDowntimeSeconds: 0, unscheduledDowntimeSeconds: 0,
+                productionRateWeightedSum: 0, productionRateWeight: 0, lastShiftName: ''
+              }
+            });
+          }
+          return byJob.get(jobName);
+        };
+
+        for (const event of state.timelineEvents) {
+          const job = ensure(event.jobName);
+          const isUptime = (event.productionState || '').toLowerCase() === 'uptime';
+          if (isUptime) {
+            job.timeline.uptimeSeconds += event.durationSeconds;
+          } else {
+            job.timeline.downtimeSeconds += event.durationSeconds;
+            job.timeline.reasons.set(event.reason, (job.timeline.reasons.get(event.reason) || 0) + event.durationSeconds);
+          }
+        }
+
+        for (const row of state.jobStatisticsRows) {
+          const job = ensure(row.jobName);
+          job.stats.totalPieces += row.totalPieces;
+          job.stats.goodPieces += row.goodPieces;
+          job.stats.rejectPieces += row.rejectPieces;
+          job.stats.totalTimeSeconds += row.totalTimeSeconds;
+          job.stats.uptimeSeconds += row.uptimeSeconds;
+          job.stats.scheduledDowntimeSeconds += row.scheduledDowntimeSeconds;
+          job.stats.unscheduledDowntimeSeconds += row.unscheduledDowntimeSeconds;
+          job.stats.productionRateWeightedSum += row.productionRate * Math.max(1, row.totalTimeSeconds);
+          job.stats.productionRateWeight += Math.max(1, row.totalTimeSeconds);
+          job.stats.lastShiftName = row.shiftName || job.stats.lastShiftName;
+        }
+
+        return Array.from(byJob.values()).sort((a,b) => a.jobName.localeCompare(b.jobName));
+      }
+
+      function render(meta = { added: 0, duplicates: 0, unsupported: 0 }) {
+        const jobs = aggregateByJob();
+
+        els.loadedFiles.innerHTML = state.loadedFiles.map((f) => `<li>${f.name} <span class="pill">${f.type === 'timeline' ? 'timeline' : 'jobstats'}</span></li>`).join('');
+        const timelineCount = state.loadedFiles.filter((f) => f.type === 'timeline').length;
+        const statsCount = state.loadedFiles.filter((f) => f.type === 'jobStats').length;
+        els.fileTypeInfo.innerHTML = `<span class="pill">Timeline bestanden: ${timelineCount}</span><span class="pill">JobStatistics bestanden: ${statsCount}</span>`;
+
+        if (state.loadedFiles.length === 0) {
+          els.status.textContent = 'Nog geen bestanden geladen.';
+        } else {
+          els.status.textContent = `${meta.added} bestand(en) toegevoegd, ${meta.duplicates} dubbel(e) overgeslagen, ${meta.unsupported} niet-herkend.`;
+        }
+
+        renderSummary(jobs);
+        renderJobTable(jobs);
+        renderJobSelector(jobs);
+        renderCrossSection(els.jobSelect.value || jobs[0]?.jobName);
+      }
+
+      function renderSummary(jobs) {
+        const timelineUp = jobs.reduce((s,j) => s + j.timeline.uptimeSeconds, 0);
+        const timelineDown = jobs.reduce((s,j) => s + j.timeline.downtimeSeconds, 0);
+        const timelineEff = timelineUp + timelineDown === 0 ? 0 : (timelineUp / (timelineUp + timelineDown)) * 100;
+        const totalPieces = jobs.reduce((s,j) => s + j.stats.totalPieces, 0);
+        const totalReject = jobs.reduce((s,j) => s + j.stats.rejectPieces, 0);
+
+        const cards = [
+          ['Ingeladen bestanden', state.loadedFiles.length],
+          ['Jobs', jobs.length],
+          ['Totale uptime (timeline)', formatDuration(timelineUp)],
+          ['Totale downtime (timeline)', formatDuration(timelineDown)],
+          ['Gem. efficiëntie (timeline)', `${timelineEff.toFixed(2)}%`],
+          ['Total Pieces (JobStatistics)', totalPieces],
+          ['Reject Pieces (JobStatistics)', totalReject]
+        ];
+        els.summaryCards.innerHTML = cards.map(([label, value]) => `<article class="card"><span>${label}</span><strong>${value}</strong></article>`).join('');
+      }
+
+      function renderJobTable(jobs) {
+        if (jobs.length === 0) {
+          els.jobTableBody.innerHTML = '<tr><td colspan="8" class="muted">Nog geen data.</td></tr>';
+          return;
+        }
+        els.jobTableBody.innerHTML = jobs.map((job) => {
+          const t = job.timeline;
+          const s = job.stats;
+          const eff = t.uptimeSeconds + t.downtimeSeconds === 0 ? 0 : (t.uptimeSeconds / (t.uptimeSeconds + t.downtimeSeconds)) * 100;
+          const topReason = Array.from(t.reasons.entries()).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'Geen';
+          const prodRate = s.productionRateWeight === 0 ? 0 : s.productionRateWeightedSum / s.productionRateWeight;
+          return `<tr>
+            <td>${job.jobName}</td>
+            <td>${formatDuration(t.uptimeSeconds)}</td>
+            <td>${formatDuration(t.downtimeSeconds)}</td>
+            <td>${eff.toFixed(2)}%<div class="progress"><span style="width:${eff.toFixed(2)}%"></span></div></td>
+            <td>${s.totalPieces}</td>
+            <td>${s.goodPieces} / ${s.rejectPieces}</td>
+            <td>${prodRate.toFixed(2)}</td>
+            <td>${topReason}</td>
+          </tr>`;
+        }).join('');
+      }
+
+      function renderJobSelector(jobs) {
+        if (jobs.length === 0) { els.jobSelect.innerHTML = ''; return; }
+        const current = els.jobSelect.value;
+        els.jobSelect.innerHTML = jobs.map((j) => `<option value="${j.jobName}">${j.jobName}</option>`).join('');
+        if (jobs.some((j) => j.jobName === current)) els.jobSelect.value = current;
+      }
+
+      function renderCrossSection(jobName) {
+        const job = aggregateByJob().find((j) => j.jobName === jobName);
+        if (!job) {
+          els.selectedJobStats.innerHTML = '<p class="muted">Geen job geselecteerd.</p>';
+          els.reasonBreakdown.innerHTML = '';
+          return;
+        }
+
+        const t = job.timeline;
+        const s = job.stats;
+        const timelineEff = t.uptimeSeconds + t.downtimeSeconds === 0 ? 0 : (t.uptimeSeconds / (t.uptimeSeconds + t.downtimeSeconds)) * 100;
+        const jobStatsEff = s.totalTimeSeconds === 0 ? 0 : (s.uptimeSeconds / s.totalTimeSeconds) * 100;
+        const prodRate = s.productionRateWeight === 0 ? 0 : s.productionRateWeightedSum / s.productionRateWeight;
+
+        els.selectedJobStats.innerHTML = `
+          <div class="cards">
+            <article class="card"><span>Job</span><strong>${job.jobName}</strong></article>
+            <article class="card"><span>Timeline efficiëntie</span><strong>${timelineEff.toFixed(2)}%</strong></article>
+            <article class="card"><span>JobStatistics uptime-rate</span><strong>${jobStatsEff.toFixed(2)}%</strong></article>
+            <article class="card"><span>Total Pieces</span><strong>${s.totalPieces}</strong></article>
+            <article class="card"><span>Good/Reject</span><strong>${s.goodPieces} / ${s.rejectPieces}</strong></article>
+            <article class="card"><span>Production Rate</span><strong>${prodRate.toFixed(2)}</strong></article>
+            <article class="card"><span>Shift</span><strong>${s.lastShiftName || '-'}</strong></article>
+            <article class="card"><span>Uptime/Unscheduled DT (JobStatistics)</span><strong>${formatDuration(s.uptimeSeconds)} / ${formatDuration(s.unscheduledDowntimeSeconds)}</strong></article>
+          </div>
+        `;
+
+        const reasons = Array.from(t.reasons.entries()).sort((a,b)=>b[1]-a[1]);
+        if (reasons.length === 0) {
+          els.reasonBreakdown.innerHTML = '<p class="muted">Geen downtime oorzaken in timeline voor deze job.</p>';
+          return;
+        }
+
+        els.reasonBreakdown.innerHTML = reasons.map(([reason, sec]) => {
+          const pct = t.downtimeSeconds === 0 ? 0 : (sec / t.downtimeSeconds) * 100;
+          return `<div class="reason-row"><div><div>${reason} (${formatDuration(sec)})</div><div class="progress"><span style="width:${pct.toFixed(2)}%"></span></div></div><strong>${pct.toFixed(1)}%</strong></div>`;
+        }).join('');
+      }
+
+      render();
+    </script>
+  </body>
+</html>
