@@ -79,6 +79,8 @@
               <option value="eff_asc">Efficiëntie laag-hoog</option>
               <option value="pieces_desc">Total Pieces hoog-laag</option>
               <option value="pieces_asc">Total Pieces laag-hoog</option>
+              <option value="speed_desc">Snelheid uptime hoog-laag</option>
+              <option value="speed_asc">Snelheid uptime laag-hoog</option>
             </select>
           </div>
         </div>
@@ -94,6 +96,7 @@
                 <th>Total Pieces</th>
                 <th>Good/Reject</th>
                 <th>Production Rate</th>
+                <th>Snelheid tijdens uptime (good/uur)</th>
                 <th>Belangrijkste downtime oorzaak</th>
               </tr>
             </thead>
@@ -402,6 +405,13 @@
         };
       }
 
+      function getGoodPerUptimeHour(job) {
+        const primary = getPrimaryTimes(job);
+        const uptimeHours = primary.uptimeSeconds / 3600;
+        if (uptimeHours <= 0) return 0;
+        return job.stats.goodPieces / uptimeHours;
+      }
+
       function getFilteredSortedJobs(jobs) {
         const filterText = state.tableFilterText;
 
@@ -417,7 +427,7 @@
             primary.uptimeSeconds + primary.downtimeSeconds === 0
               ? 0
               : (primary.uptimeSeconds / (primary.uptimeSeconds + primary.downtimeSeconds)) * 100;
-          return { job, efficiency, pieces: job.stats.totalPieces || 0 };
+          return { job, efficiency, pieces: job.stats.totalPieces || 0, speed: getGoodPerUptimeHour(job) };
         });
 
         withMetrics.sort((a, b) => {
@@ -436,6 +446,10 @@
               return b.pieces - a.pieces;
             case 'pieces_asc':
               return a.pieces - b.pieces;
+            case 'speed_desc':
+              return b.speed - a.speed;
+            case 'speed_asc':
+              return a.speed - b.speed;
             case 'date_desc':
             default:
               return b.job.lastSeenTs - a.job.lastSeenTs;
@@ -466,7 +480,7 @@
 
       function renderJobTable(jobs) {
         if (jobs.length === 0) {
-          els.jobTableBody.innerHTML = '<tr><td colspan="9" class="muted">Geen jobs voor deze filter.</td></tr>';
+          els.jobTableBody.innerHTML = '<tr><td colspan="10" class="muted">Geen jobs voor deze filter.</td></tr>';
           return;
         }
         els.jobTableBody.innerHTML = jobs.map((job) => {
@@ -479,6 +493,7 @@
               : (primary.uptimeSeconds / (primary.uptimeSeconds + primary.downtimeSeconds)) * 100;
           const topReason = Array.from(t.reasons.entries()).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'Geen';
           const prodRate = s.productionRateWeight === 0 ? 0 : s.productionRateWeightedSum / s.productionRateWeight;
+          const goodPerUptimeHour = getGoodPerUptimeHour(job);
           const period = `${formatDateTime(job.firstSeenTs)} → ${formatDateTime(job.lastSeenTs)}`;
           return `<tr>
             <td>${job.jobName}</td>
@@ -489,6 +504,7 @@
             <td>${s.totalPieces}</td>
             <td>${s.goodPieces} / ${s.rejectPieces}</td>
             <td>${prodRate.toFixed(2)}</td>
+            <td>${goodPerUptimeHour.toFixed(2)}</td>
             <td>${topReason}</td>
           </tr>`;
         }).join('');
@@ -533,6 +549,7 @@
             <article class="card"><span>Total Pieces</span><strong>${s.totalPieces}</strong></article>
             <article class="card"><span>Good/Reject</span><strong>${s.goodPieces} / ${s.rejectPieces}</strong></article>
             <article class="card"><span>Production Rate</span><strong>${prodRate.toFixed(2)}</strong></article>
+            <article class="card"><span>Snelheid tijdens uptime (good/uur)</span><strong>${getGoodPerUptimeHour(job).toFixed(2)}</strong></article>
             <article class="card"><span>Shift</span><strong>${s.lastShiftName || '-'}</strong></article>
             <article class="card"><span>Uptime/Unscheduled DT (JobStatistics)</span><strong>${formatDuration(s.uptimeSeconds)} / ${formatDuration(s.unscheduledDowntimeSeconds)}</strong></article>
           </div>
