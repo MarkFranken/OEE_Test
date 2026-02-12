@@ -37,6 +37,16 @@
       .field { display:grid; gap:.2rem; }
       .field label { font-size:.82rem; color:#4f6478; }
       .field input,.field select { padding:.45rem .5rem; border:1px solid #cfd9e6; border-radius:8px; min-width:180px; }
+      .jobs-layout { display:grid; grid-template-columns: minmax(0, 1fr) 360px; gap:1rem; }
+      .job-detail { border:1px solid #dbe4f1; border-radius:12px; padding:.9rem; background:#f9fbff; }
+      .job-detail h3 { margin-bottom:.5rem; }
+      .job-detail canvas { width:100%; max-width:220px; display:block; margin:.3rem auto .8rem; }
+      .legend { display:grid; gap:.35rem; margin-bottom:.8rem; }
+      .legend-item { display:flex; align-items:center; justify-content:space-between; gap:.6rem; font-size:.9rem; }
+      .dot { width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:.35rem; }
+      .jobs-table tbody tr { cursor:pointer; }
+      .jobs-table tbody tr.active-row { background:#eef5ff; }
+      .downtime-list { margin:0; padding-left:1rem; display:grid; gap:.25rem; }
     </style>
   </head>
   <body>
@@ -84,24 +94,34 @@
             </select>
           </div>
         </div>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Job</th>
-                <th>Periode</th>
-                <th>Uptime (JobStatistics primair)</th>
-                <th>Downtime (JobStatistics primair)</th>
-                <th>Efficiëntie (JobStatistics primair)</th>
-                <th>Total Pieces</th>
-                <th>Good/Reject</th>
-                <th>Production Rate</th>
-                <th>Snelheid tijdens uptime (good/uur)</th>
-                <th>Belangrijkste downtime oorzaak</th>
-              </tr>
-            </thead>
-            <tbody id="jobTableBody"></tbody>
-          </table>
+        <div class="jobs-layout">
+          <div class="table-wrapper">
+            <table class="jobs-table">
+              <thead>
+                <tr>
+                  <th>Job</th>
+                  <th>Periode</th>
+                  <th>Uptime (JobStatistics primair)</th>
+                  <th>Downtime (JobStatistics primair)</th>
+                  <th>Efficiëntie (JobStatistics primair)</th>
+                  <th>Total Pieces</th>
+                  <th>Good/Reject</th>
+                  <th>Production Rate</th>
+                  <th>Snelheid tijdens uptime (good/uur)</th>
+                  <th>Belangrijkste downtime oorzaak</th>
+                </tr>
+              </thead>
+              <tbody id="jobTableBody"></tbody>
+            </table>
+          </div>
+          <aside class="job-detail" id="jobDetailPanel">
+            <h3>Job detail</h3>
+            <p id="jobDetailTitle" class="muted">Klik op een job in de tabel.</p>
+            <canvas id="jobPieChart" width="220" height="220" aria-label="Job verdeling chart"></canvas>
+            <div id="jobPieLegend" class="legend"></div>
+            <h4>Downtimes in deze job</h4>
+            <ul id="jobDowntimeList" class="downtime-list"></ul>
+          </aside>
         </div>
       </section>
 
@@ -128,7 +148,11 @@
         selectedJobStats: document.getElementById('selectedJobStats'),
         reasonBreakdown: document.getElementById('reasonBreakdown'),
         jobFilterInput: document.getElementById('jobFilterInput'),
-        sortBySelect: document.getElementById('sortBySelect')
+        sortBySelect: document.getElementById('sortBySelect'),
+        jobDetailTitle: document.getElementById('jobDetailTitle'),
+        jobPieChart: document.getElementById('jobPieChart'),
+        jobPieLegend: document.getElementById('jobPieLegend'),
+        jobDowntimeList: document.getElementById('jobDowntimeList')
       };
 
       const state = {
@@ -137,7 +161,8 @@
         timelineEvents: [],
         jobStatisticsRows: [],
         tableFilterText: '',
-        tableSortBy: 'date_desc'
+        tableSortBy: 'date_desc',
+        selectedJobName: ''
       };
 
       const HEADERS = {
@@ -180,7 +205,17 @@
         render({ added: 0, duplicates: 0, unsupported: 0 });
       });
 
-      els.jobSelect.addEventListener('change', () => renderCrossSection(els.jobSelect.value));
+      els.jobSelect.addEventListener('change', () => {
+        state.selectedJobName = els.jobSelect.value;
+        render();
+      });
+
+      els.jobTableBody.addEventListener('click', (event) => {
+        const row = event.target.closest('tr[data-job-name]');
+        if (!row) return;
+        state.selectedJobName = row.dataset.jobName;
+        render();
+      });
 
       els.jobFilterInput.addEventListener('input', (event) => {
         state.tableFilterText = (event.target.value || '').trim().toLowerCase();
@@ -370,10 +405,13 @@
         }
 
         renderSummary(jobs);
-        renderJobTable(filteredSortedJobs);
-        renderJobSelector(filteredSortedJobs);
-        const selectedFromFiltered = filteredSortedJobs.find((j) => j.jobName === els.jobSelect.value)?.jobName;
-        renderCrossSection(selectedFromFiltered || filteredSortedJobs[0]?.jobName || jobs[0]?.jobName);
+        const selectedFromFiltered = filteredSortedJobs.find((j) => j.jobName === state.selectedJobName)?.jobName;
+        const selectedJobName = selectedFromFiltered || filteredSortedJobs[0]?.jobName || jobs[0]?.jobName || '';
+        state.selectedJobName = selectedJobName;
+        renderJobTable(filteredSortedJobs, selectedJobName);
+        renderJobSelector(filteredSortedJobs, selectedJobName);
+        renderJobSideDetail(jobs.find((j) => j.jobName === selectedJobName));
+        renderCrossSection(selectedJobName);
       }
 
       function getPrimaryTimes(job) {
@@ -478,7 +516,7 @@
         els.summaryCards.innerHTML = cards.map(([label, value]) => `<article class="card"><span>${label}</span><strong>${value}</strong></article>`).join('');
       }
 
-      function renderJobTable(jobs) {
+      function renderJobTable(jobs, selectedJobName) {
         if (jobs.length === 0) {
           els.jobTableBody.innerHTML = '<tr><td colspan="10" class="muted">Geen jobs voor deze filter.</td></tr>';
           return;
@@ -495,7 +533,8 @@
           const prodRate = s.productionRateWeight === 0 ? 0 : s.productionRateWeightedSum / s.productionRateWeight;
           const goodPerUptimeHour = getGoodPerUptimeHour(job);
           const period = `${formatDateTime(job.firstSeenTs)} → ${formatDateTime(job.lastSeenTs)}`;
-          return `<tr>
+          const rowClass = job.jobName === selectedJobName ? 'active-row' : '';
+          return `<tr class="${rowClass}" data-job-name="${job.jobName}">
             <td>${job.jobName}</td>
             <td>${period}</td>
             <td>${formatDuration(primary.uptimeSeconds)}</td>
@@ -510,13 +549,111 @@
         }).join('');
       }
 
-      function renderJobSelector(jobs) {
+      function renderJobSelector(jobs, selectedJobName) {
         if (jobs.length === 0) { els.jobSelect.innerHTML = ''; return; }
-        const current = els.jobSelect.value;
         els.jobSelect.innerHTML = jobs
           .map((j) => `<option value="${j.jobName}">${j.jobName} (${formatDateTime(j.firstSeenTs)})</option>`)
           .join('');
-        if (jobs.some((j) => j.jobName === current)) els.jobSelect.value = current;
+        if (jobs.some((j) => j.jobName === selectedJobName)) {
+          els.jobSelect.value = selectedJobName;
+        }
+      }
+
+      function getDowntimeBreakdownForDetail(job) {
+        const primary = getPrimaryTimes(job);
+        const reasons = Array.from(job.timeline.reasons.entries());
+        const ready = reasons
+          .filter(([reason]) => reason.toLowerCase() === 'readynoproductfeed')
+          .reduce((sum, [, sec]) => sum + sec, 0);
+        const otherKnown = reasons
+          .filter(([reason]) => reason.toLowerCase() !== 'readynoproductfeed')
+          .reduce((sum, [, sec]) => sum + sec, 0);
+        const missing = Math.max(0, primary.downtimeSeconds - (ready + otherKnown));
+        return {
+          uptime: primary.uptimeSeconds,
+          readyDowntime: ready,
+          otherDowntime: otherKnown + missing
+        };
+      }
+
+      function drawJobPieChart(breakdown) {
+        const canvas = els.jobPieChart;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const items = [
+          { key: 'Uptime', value: breakdown.uptime, color: '#22a06b' },
+          { key: 'Downtime ReadyNoProductFeed', value: breakdown.readyDowntime, color: '#f6c547' },
+          { key: 'Overige downtime', value: breakdown.otherDowntime, color: '#e34b4b' }
+        ];
+        const total = items.reduce((s, i) => s + i.value, 0);
+        if (total <= 0) return items;
+
+        let start = -Math.PI / 2;
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const radius = 82;
+
+        for (const item of items) {
+          const angle = (item.value / total) * Math.PI * 2;
+          if (angle <= 0) continue;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.arc(cx, cy, radius, start, start + angle);
+          ctx.closePath();
+          ctx.fillStyle = item.color;
+          ctx.fill();
+          start += angle;
+        }
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, 38, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+
+        return items;
+      }
+
+      function renderJobSideDetail(job) {
+        if (!job) {
+          els.jobDetailTitle.textContent = 'Klik op een job in de tabel.';
+          els.jobPieLegend.innerHTML = '';
+          els.jobDowntimeList.innerHTML = '<li class="muted">Geen job geselecteerd.</li>';
+          const ctx = els.jobPieChart.getContext('2d');
+          ctx.clearRect(0, 0, els.jobPieChart.width, els.jobPieChart.height);
+          return;
+        }
+
+        const breakdown = getDowntimeBreakdownForDetail(job);
+        const parts = drawJobPieChart(breakdown);
+        const total = breakdown.uptime + breakdown.readyDowntime + breakdown.otherDowntime;
+
+        els.jobDetailTitle.innerHTML = `<strong>${job.jobName}</strong><br><span class="muted">Totale jobduur: ${formatDuration(total)}</span>`;
+
+        els.jobPieLegend.innerHTML = parts.map((part) => {
+          const pct = total === 0 ? 0 : (part.value / total) * 100;
+          return `<div class="legend-item"><span><span class="dot" style="background:${part.color}"></span>${part.key}</span><strong>${formatDuration(part.value)} (${pct.toFixed(1)}%)</strong></div>`;
+        }).join('');
+
+        const reasonEntries = Array.from(job.timeline.reasons.entries()).sort((a, b) => b[1] - a[1]);
+        const listedReasons = [...reasonEntries];
+        const missing = Math.max(0, breakdown.otherDowntime - reasonEntries
+          .filter(([reason]) => reason.toLowerCase() !== 'readynoproductfeed')
+          .reduce((sum, [, sec]) => sum + sec, 0));
+
+        if (missing > 0) {
+          listedReasons.push(['Onbekende downtime (ontbreekt in timeline)', missing]);
+        }
+
+        if (listedReasons.length === 0) {
+          els.jobDowntimeList.innerHTML = '<li class="muted">Geen downtime regels in timeline voor deze job.</li>';
+          return;
+        }
+
+        els.jobDowntimeList.innerHTML = listedReasons
+          .sort((a, b) => b[1] - a[1])
+          .map(([reason, sec]) => `<li>${reason}: <strong>${formatDuration(sec)}</strong></li>`)
+          .join('');
       }
 
       function renderCrossSection(jobName) {
