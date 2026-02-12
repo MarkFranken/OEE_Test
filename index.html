@@ -212,6 +212,121 @@
         jobStats: 'job start time,job end time,job name,current user,additional data,total pieces,good pieces,reject pieces,bad piece rate,total time,scheduled downtime,unscheduled downtime,uptime,good production time,nominal production time,nominal production time rate,scheduled downtime rate,unscheduled downtime rate,production rate,shift name'
       };
 
+      const ALARM_TEXT_BY_CODE = {
+        0: 'Noodstop actief',
+        1: 'Noodstop Vouwplak actief',
+        2: 'Noodstop downstream actief',
+        3: 'Geen luchtdruk',
+        4: 'Niet alle servo\'s zijn geïnitialiseerd',
+        10: 'Noodstop knop ingedrukt op hoofdpaneel OP1',
+        11: 'Noodstop knop ingedrukt op paneel OP2',
+        12: 'Noodstop knop ingedrukt op paneel OP3',
+        13: 'Noodstop knop ingedrukt op paneel OP4',
+        20: 'Stop knop ingedrukt',
+        40: 'Robopacker draait te langzaam of vouwplak draait te snel. Pas snelheden aan.',
+        60: 'Geen 24V in de kast (A4)',
+        61: 'Geen 24V in het veld (A5)',
+        62: 'Geen 24V CPU voeding P3 servo driver Seperator/Collector/Stacker (P1)',
+        63: 'Geen 24V CPU voeding P3 servo driver Gantry (P1.1)',
+        64: 'Geen 24V CPU voeding micro servo drives (M1)',
+        65: 'Geen 24V geschakelde voeding (A6)',
+        66: 'Geen 24V geschakelde zone 1 (Z1)',
+        67: 'Geen 24V geschakelde zone 2 (Z2)',
+        68: 'Geen 24V remvoeding micro servo drives (A7)',
+        69: 'Geen 24V I/O kaarten in het veld (A8)',
+        70: 'Geen 24V X2X bus (A3.1)',
+        97: 'Kritisch alarm',
+        98: 'Kritisch alarm',
+        99: 'Bewegingstimeout cylinder',
+        100: 'Separator breedte links beweegt niet',
+        101: 'Separator breedte rechts beweegt niet',
+        102: 'Robotpacker gestopt, risico op botsing. Productaanvoer te snel',
+        103: 'Separatiefout, kartonstroom te lang. Systeem gestopt',
+        104: 'Separator positieverzet beweegt niet',
+        105: 'Wisselen van encoder mislukt',
+        106: 'Dozen hoge snelheidsbanden separator verwijderen vóór starten',
+        107: 'Referentie fout servo separatievinger links',
+        108: 'Referentie fout servo separatievinger rechts',
+        109: 'Kritisch alarm Motor: separator breedte links',
+        110: 'Kritisch alarm Motor: separator breedte rechts',
+        111: 'Kritisch alarm Motor: separator hoogte',
+        112: 'Blokkade van dozen aan het einde van de separator',
+        113: 'Kritisch alarm servo 0',
+        114: 'Kritisch alarm servo 1',
+        115: 'Kritisch alarm servo 2',
+        116: 'Kritisch alarm servo 3',
+        117: 'Kritisch alarm servo 4',
+        118: 'Kritisch alarm servo 5',
+        119: 'Kritisch alarm servo 6',
+        120: 'Kritisch alarm servo 7',
+        121: 'Kritisch alarm servo 8',
+        122: 'Kritisch alarm servo 9',
+        123: 'Kritisch alarm module Seperator cabinet',
+        124: 'Dozen niet gesepareerd, controleer invoerriemen',
+        125: 'Doosafstand te klein voor correcte separatie',
+        126: 'Separatie gestart maar Collector niet klaar',
+        127: 'Separator invoer hoogte meting buiten bereik',
+        128: 'Motor separator hoogte beweegt verkeerde richting',
+        129: 'Motor separator breedte links beweegt verkeerde richting',
+        130: 'Motor separator breedte rechts beweegt verkeerde richting',
+        131: 'Separatie vingers lopen niet synchroon',
+        132: 'Onjuiste separatie gedetecteerd, invoer gestopt',
+        150: 'Collector/Stacker breedte veranderd; automatisch leegdraaien niet mogelijk',
+        151: 'Referentie fout servo Collector Pushvinger verticaal 1',
+        152: 'Referentie fout servo Collector Pushvinger verticaal 2',
+        153: 'Kritisch alarm Motor: Collector/Stacker breedte',
+        154: 'Naar startpositie bewegen niet mogelijk met producten in machine',
+        155: 'Kritisch alarm servo 10',
+        156: 'Kritisch alarm servo 11',
+        157: 'Kritisch alarm servo 12',
+        158: 'Kritisch alarm servo 13',
+        159: 'Kritisch alarm servo 14',
+        160: 'Kritisch alarm servo 15',
+        161: 'Kritisch alarm servo 16',
+        162: 'Kritisch alarm servo 17',
+        163: 'Kritisch alarm servo 18',
+        164: 'Kritisch alarm servo 19',
+        165: 'Kritisch alarm servo 20',
+        166: 'Dozen boven achterwand Collector gedetecteerd',
+        167: 'Kritisch alarm module Collector cabinet',
+        168: 'Motor Collector/Stacker breedte beweegt verkeerde richting',
+        169: 'Seperator heeft de Collector niet binnen de tijd kunnen vullen',
+        200: 'Stacker bundel te hoog; risico op crash',
+        201: 'Referentie fout servo Stacker Pushvinger verticaal 1',
+        202: 'Referentie fout servo Stacker Pushvinger verticaal 2',
+        213: 'Stacker kan bundel niet verder duwen, wacht op Strapper gereed',
+        214: 'Stacker kan bundel niet verder duwen, wacht op Downstream gereed',
+        215: 'Stacker cannot push bundle, waiting on Conveyor ready',
+        216: 'Stacker crashbeveiligingssensor geactiveerd',
+        217: 'Holdingfinger beweegt niet',
+        221: 'Downpusher Stacker heeft producthoogte niet op tijd gedetecteerd',
+        250: 'Geen luchtdruk op Gantry grijper',
+        300: 'Synchronisatie van Strapper mislukt',
+        302: 'Strapmateriaal op',
+        305: 'Strapper storing – controleer status',
+        306: 'Strapper noodstop actief',
+        307: 'Strapper niet gereed om te ontvangen',
+        350: 'Laserfotocel uitvoerband zone 2 te lang geblokkeerd',
+        351: 'Eindfotocel uitvoerband zone 2 te lang geblokkeerd',
+        352: 'Fout Interroll-motor uitvoerband zone 2',
+        400: 'Geen 24V in de kast (A4)',
+        401: 'Geen 24V in het veld (A5)',
+        402: 'Geen 24V geschakelde zone 2 (Z2)',
+        403: 'Noodstop knop ingedrukt op paneel OP5',
+        404: 'Noodstop knop ingedrukt op operatorpaneel OP6',
+        425: 'Servo error stopplaat transportbaan (35T3/35M6)',
+        426: 'Frequentieregelaar error transportbaan (16T1/16M4)',
+        427: 'Timeout stopperplaat referentie cyclus',
+        428: 'Timeout stopperplaat positionerings cyclus',
+        450: 'Downstream niet gereed',
+        500: 'Kritisch alarm servo 35',
+        501: 'Kritisch alarm servo 36',
+        502: 'Kritisch alarm servo 37',
+        503: 'Kritisch alarm servo 38',
+        504: 'Kritisch alarm servo 39'
+      };
+
+
       els.fileInput.addEventListener('change', async (event) => {
         const files = Array.from(event.target.files || []);
         if (files.length === 0) return;
@@ -281,6 +396,24 @@
 
       function splitCsvLine(line) { return line.split(','); }
 
+      function formatDowntimeReason(reason) {
+        const value = (reason || '').trim();
+        const match = value.match(/^(.*?):\s*(\d+)$/);
+        if (!match) {
+          return value || 'Onbekend';
+        }
+
+        const [, prefix, alarmCodeText] = match;
+        const alarmCode = Number(alarmCodeText);
+        const alarmNl = ALARM_TEXT_BY_CODE[alarmCode];
+        if (!alarmNl) {
+          return `${prefix}: ${alarmCode} (alarmtekst onbekend)`;
+        }
+
+        return `${prefix}: ${alarmCode} - ${alarmNl}`;
+      }
+
+
       function parseCsvByType(raw) {
         const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
         const normalized = lines.map((l) => l.toLowerCase());
@@ -294,7 +427,7 @@
               startTimestamp: parseDateTime(startTime),
               shiftId,
               productionState,
-              reason: reason || 'Onbekend',
+              reason: formatDowntimeReason(reason),
               durationSeconds: durationToSeconds(duration),
               jobName,
               endTimestamp: parseDateTime(startTime) + durationToSeconds(duration) * 1000

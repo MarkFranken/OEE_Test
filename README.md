@@ -12,6 +12,7 @@ Kleine webapp om `timeline.csv` én `jobstatistics.csv` te laden en machine-effi
 - Uptime/downtime in de hoofdtabel komt primair uit JobStatistics; Timeline wordt gebruikt als specificatie/fallback.
 - In de lijst tonen we ook de snelheid tijdens uptime: `Good Pieces / Uptime` omgerekend naar **good/uur**.
 - Timeline-spookregels met datum `1970-01-01 00:00:00` worden automatisch genegeerd.
+- Alarmcodes in downtime-redenen (bijv. `RobopackerFault: 159`) worden verrijkt met Nederlandse alarmtekst waar beschikbaar.
 - Dashboard met:
   - totaaloverzicht,
   - efficiëntie per job (timeline uptime/downtime),
