@@ -23,6 +23,7 @@ Kleine webapp om `timeline.csv` én `jobstatistics.csv` te laden en machine-effi
 - Per job zie je nu ook de periode (start/eind datum-tijd).
 - De jobs-tabel ondersteunt filteren (jobnaam / downtime reden) en sorteren (datum, jobnaam, efficiëntie, pieces).
 - Klik op een job-rij in de tabel om rechts een detailpaneel te zien met pie-chart (jobduur: uptime/downtime) en downtime-lijst met duur per reden.
+- De efficiëntiebalk in de tabel gebruikt dezelfde kleuren als de pie chart: uptime groen, ReadyNoProductFeed geel, overige downtime rood (van links naar rechts).
 - Er is een 2e tabblad **Downtime redenen** met alle downtime-redenen onder elkaar en de opgetelde downtime.
 - In tab **Downtime redenen** kun je op een reden klikken en rechts per voorval zien in welke job dit gebeurde en hoe lang het duurde.
 - Het rechter detailpaneel blijft sticky zichtbaar tijdens scrollen op grotere schermen.

@@ -28,6 +28,11 @@
       th,td { text-align: left; border-bottom: 1px solid #e5eaf2; padding: .55rem; vertical-align: top; }
       .progress { width: 100%; height: 12px; background: #eff3f9; border-radius: 999px; overflow: hidden; }
       .progress > span { display: block; height: 100%; background: linear-gradient(90deg,#2a7bff,#23c29f); }
+      .stacked-progress { display:flex; width:100%; height:12px; background:#eff3f9; border-radius:999px; overflow:hidden; }
+      .stacked-progress .seg { height:100%; }
+      .seg.up { background:#22a06b; }
+      .seg.ready { background:#f6c547; }
+      .seg.other { background:#e34b4b; }
       .reason-row { display:grid; grid-template-columns: 1fr 80px; align-items: center; gap:.75rem; margin-bottom:.5rem; }
       #jobSelect { margin: .5rem 0 1rem; padding: .5rem; }
       .meta { display:flex; flex-wrap:wrap; gap:.5rem; }
@@ -653,6 +658,20 @@
         };
       }
 
+      function getEfficiencyBarSegments(job) {
+        const breakdown = getDowntimeBreakdownForDetail(job);
+        const total = breakdown.uptime + breakdown.readyDowntime + breakdown.otherDowntime;
+        if (total <= 0) {
+          return { upPct: 0, readyPct: 0, otherPct: 0 };
+        }
+
+        return {
+          upPct: (breakdown.uptime / total) * 100,
+          readyPct: (breakdown.readyDowntime / total) * 100,
+          otherPct: (breakdown.otherDowntime / total) * 100
+        };
+      }
+
       function getGoodPerUptimeHour(job) {
         const primary = getPrimaryTimes(job);
         const uptimeHours = primary.uptimeSeconds / 3600;
@@ -743,13 +762,21 @@
           const prodRate = s.productionRateWeight === 0 ? 0 : s.productionRateWeightedSum / s.productionRateWeight;
           const goodPerUptimeHour = getGoodPerUptimeHour(job);
           const period = `${formatDateTime(job.firstSeenTs)} → ${formatDateTime(job.lastSeenTs)}`;
+          const segments = getEfficiencyBarSegments(job);
           const rowClass = job.jobName === selectedJobName ? 'active-row' : '';
           return `<tr class="${rowClass}" data-job-name="${job.jobName}">
             <td>${job.jobName}</td>
             <td>${period}</td>
             <td>${formatDuration(primary.uptimeSeconds)}</td>
             <td>${formatDuration(primary.downtimeSeconds)}</td>
-            <td>${eff.toFixed(2)}%<div class="progress"><span style="width:${eff.toFixed(2)}%"></span></div></td>
+            <td>
+              ${eff.toFixed(2)}%
+              <div class="stacked-progress" aria-label="Uptime en downtime verdeling">
+                <span class="seg up" style="width:${segments.upPct.toFixed(2)}%"></span>
+                <span class="seg ready" style="width:${segments.readyPct.toFixed(2)}%"></span>
+                <span class="seg other" style="width:${segments.otherPct.toFixed(2)}%"></span>
+              </div>
+            </td>
             <td>${s.totalPieces}</td>
             <td>${s.goodPieces} / ${s.rejectPieces}</td>
             <td>${prodRate.toFixed(2)}</td>
