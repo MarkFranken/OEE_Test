@@ -88,9 +88,9 @@
               <tr>
                 <th>Job</th>
                 <th>Periode</th>
-                <th>Uptime (timeline)</th>
-                <th>Downtime (timeline)</th>
-                <th>Efficiëntie (timeline)</th>
+                <th>Uptime (JobStatistics primair)</th>
+                <th>Downtime (JobStatistics primair)</th>
+                <th>Efficiëntie (JobStatistics primair)</th>
                 <th>Total Pieces</th>
                 <th>Good/Reject</th>
                 <th>Production Rate</th>
@@ -373,6 +373,35 @@
         renderCrossSection(selectedFromFiltered || filteredSortedJobs[0]?.jobName || jobs[0]?.jobName);
       }
 
+      function getPrimaryTimes(job) {
+        const stats = job.stats;
+        const timeline = job.timeline;
+
+        const hasJobStats =
+          stats.totalTimeSeconds > 0 ||
+          stats.uptimeSeconds > 0 ||
+          stats.scheduledDowntimeSeconds > 0 ||
+          stats.unscheduledDowntimeSeconds > 0;
+
+        if (hasJobStats) {
+          const uptime = Math.max(0, stats.uptimeSeconds);
+          const downtimeByParts = Math.max(0, stats.scheduledDowntimeSeconds + stats.unscheduledDowntimeSeconds);
+          const downtimeByTotal = Math.max(0, stats.totalTimeSeconds - uptime);
+          const downtime = Math.max(downtimeByParts, downtimeByTotal);
+          return {
+            source: 'jobstats',
+            uptimeSeconds: uptime,
+            downtimeSeconds: downtime
+          };
+        }
+
+        return {
+          source: 'timeline',
+          uptimeSeconds: Math.max(0, timeline.uptimeSeconds),
+          downtimeSeconds: Math.max(0, timeline.downtimeSeconds)
+        };
+      }
+
       function getFilteredSortedJobs(jobs) {
         const filterText = state.tableFilterText;
 
@@ -383,9 +412,11 @@
         });
 
         const withMetrics = filtered.map((job) => {
-          const uptime = job.timeline.uptimeSeconds;
-          const downtime = job.timeline.downtimeSeconds;
-          const efficiency = uptime + downtime === 0 ? 0 : (uptime / (uptime + downtime)) * 100;
+          const primary = getPrimaryTimes(job);
+          const efficiency =
+            primary.uptimeSeconds + primary.downtimeSeconds === 0
+              ? 0
+              : (primary.uptimeSeconds / (primary.uptimeSeconds + primary.downtimeSeconds)) * 100;
           return { job, efficiency, pieces: job.stats.totalPieces || 0 };
         });
 
@@ -415,18 +446,18 @@
       }
 
       function renderSummary(jobs) {
-        const timelineUp = jobs.reduce((s,j) => s + j.timeline.uptimeSeconds, 0);
-        const timelineDown = jobs.reduce((s,j) => s + j.timeline.downtimeSeconds, 0);
-        const timelineEff = timelineUp + timelineDown === 0 ? 0 : (timelineUp / (timelineUp + timelineDown)) * 100;
+        const primaryUp = jobs.reduce((sum, job) => sum + getPrimaryTimes(job).uptimeSeconds, 0);
+        const primaryDown = jobs.reduce((sum, job) => sum + getPrimaryTimes(job).downtimeSeconds, 0);
+        const primaryEff = primaryUp + primaryDown === 0 ? 0 : (primaryUp / (primaryUp + primaryDown)) * 100;
         const totalPieces = jobs.reduce((s,j) => s + j.stats.totalPieces, 0);
         const totalReject = jobs.reduce((s,j) => s + j.stats.rejectPieces, 0);
 
         const cards = [
           ['Ingeladen bestanden', state.loadedFiles.length],
           ['Jobs', jobs.length],
-          ['Totale uptime (timeline)', formatDuration(timelineUp)],
-          ['Totale downtime (timeline)', formatDuration(timelineDown)],
-          ['Gem. efficiëntie (timeline)', `${timelineEff.toFixed(2)}%`],
+          ['Totale uptime (JobStatistics primair)', formatDuration(primaryUp)],
+          ['Totale downtime (JobStatistics primair)', formatDuration(primaryDown)],
+          ['Gem. efficiëntie (JobStatistics primair)', `${primaryEff.toFixed(2)}%`],
           ['Total Pieces (JobStatistics)', totalPieces],
           ['Reject Pieces (JobStatistics)', totalReject]
         ];
@@ -441,15 +472,19 @@
         els.jobTableBody.innerHTML = jobs.map((job) => {
           const t = job.timeline;
           const s = job.stats;
-          const eff = t.uptimeSeconds + t.downtimeSeconds === 0 ? 0 : (t.uptimeSeconds / (t.uptimeSeconds + t.downtimeSeconds)) * 100;
+          const primary = getPrimaryTimes(job);
+          const eff =
+            primary.uptimeSeconds + primary.downtimeSeconds === 0
+              ? 0
+              : (primary.uptimeSeconds / (primary.uptimeSeconds + primary.downtimeSeconds)) * 100;
           const topReason = Array.from(t.reasons.entries()).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'Geen';
           const prodRate = s.productionRateWeight === 0 ? 0 : s.productionRateWeightedSum / s.productionRateWeight;
           const period = `${formatDateTime(job.firstSeenTs)} → ${formatDateTime(job.lastSeenTs)}`;
           return `<tr>
             <td>${job.jobName}</td>
             <td>${period}</td>
-            <td>${formatDuration(t.uptimeSeconds)}</td>
-            <td>${formatDuration(t.downtimeSeconds)}</td>
+            <td>${formatDuration(primary.uptimeSeconds)}</td>
+            <td>${formatDuration(primary.downtimeSeconds)}</td>
             <td>${eff.toFixed(2)}%<div class="progress"><span style="width:${eff.toFixed(2)}%"></span></div></td>
             <td>${s.totalPieces}</td>
             <td>${s.goodPieces} / ${s.rejectPieces}</td>
@@ -478,6 +513,11 @@
 
         const t = job.timeline;
         const s = job.stats;
+        const primary = getPrimaryTimes(job);
+        const primaryEff =
+          primary.uptimeSeconds + primary.downtimeSeconds === 0
+            ? 0
+            : (primary.uptimeSeconds / (primary.uptimeSeconds + primary.downtimeSeconds)) * 100;
         const timelineEff = t.uptimeSeconds + t.downtimeSeconds === 0 ? 0 : (t.uptimeSeconds / (t.uptimeSeconds + t.downtimeSeconds)) * 100;
         const jobStatsEff = s.totalTimeSeconds === 0 ? 0 : (s.uptimeSeconds / s.totalTimeSeconds) * 100;
         const prodRate = s.productionRateWeight === 0 ? 0 : s.productionRateWeightedSum / s.productionRateWeight;
@@ -486,8 +526,10 @@
           <div class="cards">
             <article class="card"><span>Job</span><strong>${job.jobName}</strong></article>
             <article class="card"><span>Periode</span><strong>${formatDateTime(job.firstSeenTs)} → ${formatDateTime(job.lastSeenTs)}</strong></article>
-            <article class="card"><span>Timeline efficiëntie</span><strong>${timelineEff.toFixed(2)}%</strong></article>
+            <article class="card"><span>Efficiëntie (JobStatistics primair)</span><strong>${primaryEff.toFixed(2)}%</strong></article>
+            <article class="card"><span>Efficiëntie (timeline detail)</span><strong>${timelineEff.toFixed(2)}%</strong></article>
             <article class="card"><span>JobStatistics uptime-rate</span><strong>${jobStatsEff.toFixed(2)}%</strong></article>
+            <article class="card"><span>Uptime/Downtime (primair)</span><strong>${formatDuration(primary.uptimeSeconds)} / ${formatDuration(primary.downtimeSeconds)}</strong></article>
             <article class="card"><span>Total Pieces</span><strong>${s.totalPieces}</strong></article>
             <article class="card"><span>Good/Reject</span><strong>${s.goodPieces} / ${s.rejectPieces}</strong></article>
             <article class="card"><span>Production Rate</span><strong>${prodRate.toFixed(2)}</strong></article>
