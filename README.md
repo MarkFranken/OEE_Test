@@ -23,6 +23,7 @@ Kleine webapp om `timeline.csv` én `jobstatistics.csv` te laden en machine-effi
 - De jobs-tabel ondersteunt filteren (jobnaam / downtime reden) en sorteren (datum, jobnaam, efficiëntie, pieces).
 - Klik op een job-rij in de tabel om rechts een detailpaneel te zien met pie-chart (jobduur: uptime/downtime) en downtime-lijst met duur per reden.
 - Het rechter detailpaneel blijft sticky zichtbaar tijdens scrollen op grotere schermen.
+- Layout gebruikt nu de volledige paginabreedte en schaalt responsief mee op desktop/tablet/mobiel.
 - Werkt direct via dubbelklik op `index.html` (zonder bash/server).
 
 ## Starten (zonder bash)
