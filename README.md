@@ -29,6 +29,7 @@ Kleine webapp om `timeline.csv` én `jobstatistics.csv` te laden en machine-effi
 - Het rechter detailpaneel blijft sticky zichtbaar tijdens scrollen op grotere schermen.
 - Layout gebruikt nu de volledige paginabreedte en schaalt responsief mee op desktop/tablet/mobiel.
 - Werkt direct via dubbelklik op `index.html` (zonder bash/server).
+- Het importgedeelte staat in een apart tabblad **Importeren**.
 
 ## Starten (zonder bash)
 

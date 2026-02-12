@@ -75,23 +75,27 @@
         <p>Laad zowel <code>Timeline CSV</code> als <code>JobStatistics CSV</code> in. Dubbele bestanden worden automatisch geweigerd.</p>
       </header>
 
-      <section class="panel uploader">
-        <label for="fileInput" class="button">Kies CSV-bestand(en)</label>
-        <input id="fileInput" type="file" accept=".csv,text/csv" multiple />
-        <button id="clearBtn" class="button secondary" type="button">Leeg dataset</button>
-        <p class="tip">Je kunt deze pagina direct openen via dubbelklik op <code>index.html</code>.</p>
-        <p id="status" class="status">Nog geen bestanden geladen.</p>
-        <div id="fileTypeInfo" class="meta"></div>
-        <ul id="loadedFiles" class="loaded-files"></ul>
-      </section>
-
       <div class="tabs" role="tablist" aria-label="Dashboard tabs">
-        <button id="tabOverviewBtn" class="tab-btn active" type="button" role="tab" aria-selected="true">Overzicht</button>
+        <button id="tabImportBtn" class="tab-btn active" type="button" role="tab" aria-selected="true">Importeren</button>
+        <button id="tabOverviewBtn" class="tab-btn" type="button" role="tab" aria-selected="false">Overzicht</button>
         <button id="tabDowntimeBtn" class="tab-btn" type="button" role="tab" aria-selected="false">Downtime redenen</button>
       </div>
 
       <div class="tab-content">
-        <section id="overviewTab" class="tab-pane">
+        <section id="importTab" class="tab-pane">
+          <section class="panel uploader">
+            <h2>Bestanden importeren</h2>
+            <label for="fileInput" class="button">Kies CSV-bestand(en)</label>
+            <input id="fileInput" type="file" accept=".csv,text/csv" multiple />
+            <button id="clearBtn" class="button secondary" type="button">Leeg dataset</button>
+            <p class="tip">Je kunt deze pagina direct openen via dubbelklik op <code>index.html</code>.</p>
+            <p id="status" class="status">Nog geen bestanden geladen.</p>
+            <div id="fileTypeInfo" class="meta"></div>
+            <ul id="loadedFiles" class="loaded-files"></ul>
+          </section>
+        </section>
+
+        <section id="overviewTab" class="tab-pane hidden">
           <section class="panel">
             <h2>Overzicht</h2>
             <div id="summaryCards" class="cards"></div>
@@ -206,8 +210,10 @@
         jobPieChart: document.getElementById('jobPieChart'),
         jobPieLegend: document.getElementById('jobPieLegend'),
         jobDowntimeList: document.getElementById('jobDowntimeList'),
+        tabImportBtn: document.getElementById('tabImportBtn'),
         tabOverviewBtn: document.getElementById('tabOverviewBtn'),
         tabDowntimeBtn: document.getElementById('tabDowntimeBtn'),
+        importTab: document.getElementById('importTab'),
         overviewTab: document.getElementById('overviewTab'),
         downtimeTab: document.getElementById('downtimeTab'),
         downtimeReasonTableBody: document.getElementById('downtimeReasonTableBody'),
@@ -223,7 +229,7 @@
         tableFilterText: '',
         tableSortBy: 'date_desc',
         selectedJobName: '',
-        activeTab: 'overview',
+        activeTab: 'import',
         selectedDowntimeReason: ''
       };
 
@@ -408,6 +414,11 @@
         const row = event.target.closest('tr[data-reason]');
         if (!row) return;
         state.selectedDowntimeReason = row.dataset.reason;
+        render();
+      });
+
+      els.tabImportBtn.addEventListener('click', () => {
+        state.activeTab = 'import';
         render();
       });
 
@@ -954,13 +965,22 @@
       }
 
       function renderTabs() {
-        const showOverview = state.activeTab === 'overview';
+        const active = state.activeTab;
+        const showImport = active === 'import';
+        const showOverview = active === 'overview';
+        const showDowntime = active === 'downtime';
+
+        els.tabImportBtn.classList.toggle('active', showImport);
         els.tabOverviewBtn.classList.toggle('active', showOverview);
-        els.tabDowntimeBtn.classList.toggle('active', !showOverview);
+        els.tabDowntimeBtn.classList.toggle('active', showDowntime);
+
+        els.tabImportBtn.setAttribute('aria-selected', showImport ? 'true' : 'false');
         els.tabOverviewBtn.setAttribute('aria-selected', showOverview ? 'true' : 'false');
-        els.tabDowntimeBtn.setAttribute('aria-selected', showOverview ? 'false' : 'true');
+        els.tabDowntimeBtn.setAttribute('aria-selected', showDowntime ? 'true' : 'false');
+
+        els.importTab.classList.toggle('hidden', !showImport);
         els.overviewTab.classList.toggle('hidden', !showOverview);
-        els.downtimeTab.classList.toggle('hidden', showOverview);
+        els.downtimeTab.classList.toggle('hidden', !showDowntime);
       }
 
       function renderCrossSection(jobName) {
