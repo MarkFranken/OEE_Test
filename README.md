@@ -14,6 +14,9 @@ Kleine webapp om `timeline.csv` én `jobstatistics.csv` te laden en machine-effi
   - efficiëntie per job (timeline uptime/downtime),
   - extra job-data (pieces, production rate),
   - dwarsdoorsnede met downtime oorzaken.
+
+- Jobs worden automatisch op datum gesorteerd (nieuwste eerst) en `Base` wordt uitgefilterd.
+- Per job zie je nu ook de periode (start/eind datum-tijd).
 - Werkt direct via dubbelklik op `index.html` (zonder bash/server).
 
 ## Starten (zonder bash)

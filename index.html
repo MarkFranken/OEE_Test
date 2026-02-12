@@ -64,6 +64,7 @@
             <thead>
               <tr>
                 <th>Job</th>
+                <th>Periode</th>
                 <th>Uptime (timeline)</th>
                 <th>Downtime (timeline)</th>
                 <th>Efficiëntie (timeline)</th>
@@ -163,11 +164,13 @@
             const [startTime, shiftId, productionState, reason, duration, jobName] = splitCsvLine(line);
             return {
               startTime,
+              startTimestamp: parseDateTime(startTime),
               shiftId,
               productionState,
               reason: reason || 'Onbekend',
               durationSeconds: durationToSeconds(duration),
-              jobName
+              jobName,
+              endTimestamp: parseDateTime(startTime) + durationToSeconds(duration) * 1000
             };
           }).filter((r) => r.jobName);
           return { type: 'timeline', rows };
@@ -179,6 +182,8 @@
             const [jobStartTime, jobEndTime, jobName, currentUser, additionalData, totalPieces, goodPieces, rejectPieces, badPieceRate, totalTime, scheduledDowntime, unscheduledDowntime, uptime, goodProductionTime, nominalProductionTime, nominalProductionTimeRate, scheduledDowntimeRate, unscheduledDowntimeRate, productionRate, shiftName] = splitCsvLine(line);
             return {
               jobStartTime, jobEndTime, jobName,
+              jobStartTimestamp: parseDateTime(jobStartTime),
+              jobEndTimestamp: parseDateTime(jobEndTime),
               currentUser, additionalData,
               totalPieces: Number(totalPieces || 0),
               goodPieces: Number(goodPieces || 0),
@@ -228,6 +233,23 @@
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
       }
 
+      function parseDateTime(value) {
+        if (!value) return NaN;
+        const ts = new Date(value.replace(' ', 'T')).getTime();
+        return Number.isFinite(ts) ? ts : NaN;
+      }
+
+      function formatDateTime(value) {
+        if (!Number.isFinite(value)) return '-';
+        const d = new Date(value);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${y}-${m}-${day} ${hh}:${mm}`;
+      }
+
       function aggregateByJob() {
         const byJob = new Map();
         const ensure = (jobName) => {
@@ -239,7 +261,9 @@
                 totalPieces: 0, goodPieces: 0, rejectPieces: 0,
                 totalTimeSeconds: 0, uptimeSeconds: 0, scheduledDowntimeSeconds: 0, unscheduledDowntimeSeconds: 0,
                 productionRateWeightedSum: 0, productionRateWeight: 0, lastShiftName: ''
-              }
+              },
+              firstSeenTs: Infinity,
+              lastSeenTs: -Infinity
             });
           }
           return byJob.get(jobName);
@@ -253,6 +277,12 @@
           } else {
             job.timeline.downtimeSeconds += event.durationSeconds;
             job.timeline.reasons.set(event.reason, (job.timeline.reasons.get(event.reason) || 0) + event.durationSeconds);
+          }
+          if (Number.isFinite(event.startTimestamp)) {
+            job.firstSeenTs = Math.min(job.firstSeenTs, event.startTimestamp);
+          }
+          if (Number.isFinite(event.endTimestamp)) {
+            job.lastSeenTs = Math.max(job.lastSeenTs, event.endTimestamp);
           }
         }
 
@@ -268,9 +298,20 @@
           job.stats.productionRateWeightedSum += row.productionRate * Math.max(1, row.totalTimeSeconds);
           job.stats.productionRateWeight += Math.max(1, row.totalTimeSeconds);
           job.stats.lastShiftName = row.shiftName || job.stats.lastShiftName;
+          if (Number.isFinite(row.jobStartTimestamp)) {
+            job.firstSeenTs = Math.min(job.firstSeenTs, row.jobStartTimestamp);
+          }
+          if (Number.isFinite(row.jobEndTimestamp)) {
+            job.lastSeenTs = Math.max(job.lastSeenTs, row.jobEndTimestamp);
+          }
         }
 
-        return Array.from(byJob.values()).sort((a,b) => a.jobName.localeCompare(b.jobName));
+        return Array.from(byJob.values())
+          .filter((job) => job.jobName && job.jobName.toLowerCase() !== 'base')
+          .sort((a,b) => {
+            if (a.lastSeenTs !== b.lastSeenTs) return b.lastSeenTs - a.lastSeenTs;
+            return a.jobName.localeCompare(b.jobName);
+          });
       }
 
       function render(meta = { added: 0, duplicates: 0, unsupported: 0 }) {
@@ -314,7 +355,7 @@
 
       function renderJobTable(jobs) {
         if (jobs.length === 0) {
-          els.jobTableBody.innerHTML = '<tr><td colspan="8" class="muted">Nog geen data.</td></tr>';
+          els.jobTableBody.innerHTML = '<tr><td colspan="9" class="muted">Nog geen data.</td></tr>';
           return;
         }
         els.jobTableBody.innerHTML = jobs.map((job) => {
@@ -323,8 +364,10 @@
           const eff = t.uptimeSeconds + t.downtimeSeconds === 0 ? 0 : (t.uptimeSeconds / (t.uptimeSeconds + t.downtimeSeconds)) * 100;
           const topReason = Array.from(t.reasons.entries()).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'Geen';
           const prodRate = s.productionRateWeight === 0 ? 0 : s.productionRateWeightedSum / s.productionRateWeight;
+          const period = `${formatDateTime(job.firstSeenTs)} → ${formatDateTime(job.lastSeenTs)}`;
           return `<tr>
             <td>${job.jobName}</td>
+            <td>${period}</td>
             <td>${formatDuration(t.uptimeSeconds)}</td>
             <td>${formatDuration(t.downtimeSeconds)}</td>
             <td>${eff.toFixed(2)}%<div class="progress"><span style="width:${eff.toFixed(2)}%"></span></div></td>
@@ -339,7 +382,9 @@
       function renderJobSelector(jobs) {
         if (jobs.length === 0) { els.jobSelect.innerHTML = ''; return; }
         const current = els.jobSelect.value;
-        els.jobSelect.innerHTML = jobs.map((j) => `<option value="${j.jobName}">${j.jobName}</option>`).join('');
+        els.jobSelect.innerHTML = jobs
+          .map((j) => `<option value="${j.jobName}">${j.jobName} (${formatDateTime(j.firstSeenTs)})</option>`)
+          .join('');
         if (jobs.some((j) => j.jobName === current)) els.jobSelect.value = current;
       }
 
@@ -360,6 +405,7 @@
         els.selectedJobStats.innerHTML = `
           <div class="cards">
             <article class="card"><span>Job</span><strong>${job.jobName}</strong></article>
+            <article class="card"><span>Periode</span><strong>${formatDateTime(job.firstSeenTs)} → ${formatDateTime(job.lastSeenTs)}</strong></article>
             <article class="card"><span>Timeline efficiëntie</span><strong>${timelineEff.toFixed(2)}%</strong></article>
             <article class="card"><span>JobStatistics uptime-rate</span><strong>${jobStatsEff.toFixed(2)}%</strong></article>
             <article class="card"><span>Total Pieces</span><strong>${s.totalPieces}</strong></article>
