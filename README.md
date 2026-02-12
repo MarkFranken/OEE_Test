@@ -17,6 +17,7 @@ Kleine webapp om `timeline.csv` én `jobstatistics.csv` te laden en machine-effi
 
 - Jobs worden automatisch op datum gesorteerd (nieuwste eerst) en `Base` wordt uitgefilterd.
 - Per job zie je nu ook de periode (start/eind datum-tijd).
+- De jobs-tabel ondersteunt filteren (jobnaam / downtime reden) en sorteren (datum, jobnaam, efficiëntie, pieces).
 - Werkt direct via dubbelklik op `index.html` (zonder bash/server).
 
 ## Starten (zonder bash)

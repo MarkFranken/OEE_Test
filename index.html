@@ -33,6 +33,10 @@
       .meta { display:flex; flex-wrap:wrap; gap:.5rem; }
       .pill { padding:.2rem .55rem; border-radius:999px; background:#eaf1ff; color:#275299; font-size:.8rem; font-weight:600; }
       .tip { margin:0; font-size:.92rem; color:#4a5f74; }
+      .table-controls { display:flex; flex-wrap:wrap; gap:.6rem; margin:.4rem 0 .8rem; align-items:end; }
+      .field { display:grid; gap:.2rem; }
+      .field label { font-size:.82rem; color:#4f6478; }
+      .field input,.field select { padding:.45rem .5rem; border:1px solid #cfd9e6; border-radius:8px; min-width:180px; }
     </style>
   </head>
   <body>
@@ -59,6 +63,25 @@
 
       <section class="panel">
         <h2>Efficiëntie per job</h2>
+        <div class="table-controls">
+          <div class="field">
+            <label for="jobFilterInput">Filter op jobnaam of downtime reden</label>
+            <input id="jobFilterInput" type="text" placeholder="bijv. 42834 of ReadyNoProductFeed" />
+          </div>
+          <div class="field">
+            <label for="sortBySelect">Sorteer op</label>
+            <select id="sortBySelect">
+              <option value="date_desc">Datum (nieuwste eerst)</option>
+              <option value="date_asc">Datum (oudste eerst)</option>
+              <option value="job_asc">Jobnaam (A-Z)</option>
+              <option value="job_desc">Jobnaam (Z-A)</option>
+              <option value="eff_desc">Efficiëntie hoog-laag</option>
+              <option value="eff_asc">Efficiëntie laag-hoog</option>
+              <option value="pieces_desc">Total Pieces hoog-laag</option>
+              <option value="pieces_asc">Total Pieces laag-hoog</option>
+            </select>
+          </div>
+        </div>
         <div class="table-wrapper">
           <table>
             <thead>
@@ -100,14 +123,18 @@
         jobTableBody: document.getElementById('jobTableBody'),
         jobSelect: document.getElementById('jobSelect'),
         selectedJobStats: document.getElementById('selectedJobStats'),
-        reasonBreakdown: document.getElementById('reasonBreakdown')
+        reasonBreakdown: document.getElementById('reasonBreakdown'),
+        jobFilterInput: document.getElementById('jobFilterInput'),
+        sortBySelect: document.getElementById('sortBySelect')
       };
 
       const state = {
         signatures: new Set(),
         loadedFiles: [],
         timelineEvents: [],
-        jobStatisticsRows: []
+        jobStatisticsRows: [],
+        tableFilterText: '',
+        tableSortBy: 'date_desc'
       };
 
       const HEADERS = {
@@ -151,6 +178,16 @@
       });
 
       els.jobSelect.addEventListener('change', () => renderCrossSection(els.jobSelect.value));
+
+      els.jobFilterInput.addEventListener('input', (event) => {
+        state.tableFilterText = (event.target.value || '').trim().toLowerCase();
+        render();
+      });
+
+      els.sortBySelect.addEventListener('change', (event) => {
+        state.tableSortBy = event.target.value;
+        render();
+      });
 
       function splitCsvLine(line) { return line.split(','); }
 
@@ -316,11 +353,12 @@
 
       function render(meta = { added: 0, duplicates: 0, unsupported: 0 }) {
         const jobs = aggregateByJob();
+        const filteredSortedJobs = getFilteredSortedJobs(jobs);
 
         els.loadedFiles.innerHTML = state.loadedFiles.map((f) => `<li>${f.name} <span class="pill">${f.type === 'timeline' ? 'timeline' : 'jobstats'}</span></li>`).join('');
         const timelineCount = state.loadedFiles.filter((f) => f.type === 'timeline').length;
         const statsCount = state.loadedFiles.filter((f) => f.type === 'jobStats').length;
-        els.fileTypeInfo.innerHTML = `<span class="pill">Timeline bestanden: ${timelineCount}</span><span class="pill">JobStatistics bestanden: ${statsCount}</span>`;
+        els.fileTypeInfo.innerHTML = `<span class="pill">Timeline bestanden: ${timelineCount}</span><span class="pill">JobStatistics bestanden: ${statsCount}</span><span class="pill">Tabel jobs: ${filteredSortedJobs.length}</span>`;
 
         if (state.loadedFiles.length === 0) {
           els.status.textContent = 'Nog geen bestanden geladen.';
@@ -329,9 +367,51 @@
         }
 
         renderSummary(jobs);
-        renderJobTable(jobs);
-        renderJobSelector(jobs);
-        renderCrossSection(els.jobSelect.value || jobs[0]?.jobName);
+        renderJobTable(filteredSortedJobs);
+        renderJobSelector(filteredSortedJobs);
+        const selectedFromFiltered = filteredSortedJobs.find((j) => j.jobName === els.jobSelect.value)?.jobName;
+        renderCrossSection(selectedFromFiltered || filteredSortedJobs[0]?.jobName || jobs[0]?.jobName);
+      }
+
+      function getFilteredSortedJobs(jobs) {
+        const filterText = state.tableFilterText;
+
+        const filtered = jobs.filter((job) => {
+          if (!filterText) return true;
+          const topReason = Array.from(job.timeline.reasons.keys()).join(' ').toLowerCase();
+          return job.jobName.toLowerCase().includes(filterText) || topReason.includes(filterText);
+        });
+
+        const withMetrics = filtered.map((job) => {
+          const uptime = job.timeline.uptimeSeconds;
+          const downtime = job.timeline.downtimeSeconds;
+          const efficiency = uptime + downtime === 0 ? 0 : (uptime / (uptime + downtime)) * 100;
+          return { job, efficiency, pieces: job.stats.totalPieces || 0 };
+        });
+
+        withMetrics.sort((a, b) => {
+          switch (state.tableSortBy) {
+            case 'date_asc':
+              return a.job.firstSeenTs - b.job.firstSeenTs;
+            case 'job_asc':
+              return a.job.jobName.localeCompare(b.job.jobName);
+            case 'job_desc':
+              return b.job.jobName.localeCompare(a.job.jobName);
+            case 'eff_desc':
+              return b.efficiency - a.efficiency;
+            case 'eff_asc':
+              return a.efficiency - b.efficiency;
+            case 'pieces_desc':
+              return b.pieces - a.pieces;
+            case 'pieces_asc':
+              return a.pieces - b.pieces;
+            case 'date_desc':
+            default:
+              return b.job.lastSeenTs - a.job.lastSeenTs;
+          }
+        });
+
+        return withMetrics.map((x) => x.job);
       }
 
       function renderSummary(jobs) {
@@ -355,7 +435,7 @@
 
       function renderJobTable(jobs) {
         if (jobs.length === 0) {
-          els.jobTableBody.innerHTML = '<tr><td colspan="9" class="muted">Nog geen data.</td></tr>';
+          els.jobTableBody.innerHTML = '<tr><td colspan="9" class="muted">Geen jobs voor deze filter.</td></tr>';
           return;
         }
         els.jobTableBody.innerHTML = jobs.map((job) => {
