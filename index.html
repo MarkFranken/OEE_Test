@@ -105,6 +105,7 @@
       .job-modal-seg.ready { background:#f6c547; }
       .job-modal-seg.other { background:#e34b4b; }
       .job-modal-seg.unknown { background:#98a8bc; }
+      .timeline-tooltip { position: fixed; z-index: 60; pointer-events: none; max-width: 360px; background: rgba(10,22,38,.96); color: #fff; border-radius: 8px; padding: .45rem .55rem; font-size: .78rem; line-height: 1.35; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
       .job-modal-events { margin:0; padding-left:1rem; display:grid; gap:.3rem; }
       .tabs { display:flex; gap:.5rem; margin-top:1rem; }
       .tab-btn { border:1px solid #c9d7ea; background:#fff; color:var(--brand-navy); border-radius:10px; padding:.5rem .8rem; cursor:pointer; font-weight:700; }
@@ -244,6 +245,7 @@
                 </div>
                 <p id="weekJobModalSub" class="muted"></p>
                 <div id="weekJobModalTrack" class="job-modal-track"></div>
+                <div id="weekModalTooltip" class="timeline-tooltip hidden" role="tooltip"></div>
                 <ul id="weekJobModalEvents" class="job-modal-events"></ul>
               </div>
             </div>
@@ -316,6 +318,7 @@
         weekJobModalTitle: document.getElementById('weekJobModalTitle'),
         weekJobModalSub: document.getElementById('weekJobModalSub'),
         weekJobModalTrack: document.getElementById('weekJobModalTrack'),
+        weekModalTooltip: document.getElementById('weekModalTooltip'),
         weekJobModalEvents: document.getElementById('weekJobModalEvents'),
         weekJobModalClose: document.getElementById('weekJobModalClose'),
         downtimeReasonTableBody: document.getElementById('downtimeReasonTableBody'),
@@ -587,6 +590,24 @@
         if (event.target !== els.weekJobModal) return;
         state.selectedWeekModalJobName = '';
         render();
+      });
+
+
+      els.weekJobModalTrack.addEventListener('mousemove', (event) => {
+        const seg = event.target.closest('[data-tip]');
+        if (!seg) {
+          els.weekModalTooltip.classList.add('hidden');
+          return;
+        }
+        els.weekModalTooltip.textContent = seg.dataset.tip;
+        els.weekModalTooltip.classList.remove('hidden');
+        const offset = 14;
+        els.weekModalTooltip.style.left = `${event.clientX + offset}px`;
+        els.weekModalTooltip.style.top = `${event.clientY + offset}px`;
+      });
+
+      els.weekJobModalTrack.addEventListener('mouseleave', () => {
+        els.weekModalTooltip.classList.add('hidden');
       });
 
       function splitCsvLine(line) { return line.split(','); }
@@ -1184,7 +1205,7 @@
           .filter((event) => Number.isFinite(event.startTimestamp) && Number.isFinite(event.endTimestamp))
           .sort((a, b) => a.startTimestamp - b.startTimestamp);
 
-        const segments = raw.map((event) => {
+        const clamped = raw.map((event) => {
           const segStart = Math.max(rangeStartMs, event.startTimestamp);
           const segEnd = Math.min(rangeEndMs, event.endTimestamp);
           if (segEnd <= segStart) return null;
@@ -1192,20 +1213,60 @@
             start: segStart,
             end: segEnd,
             cls: getEventColorClass(event),
-            startLabel: formatDateTime(event.startTimestamp),
-            endLabel: formatDateTime(event.endTimestamp),
-            durationSeconds: event.durationSeconds,
             reason: event.reason || (event.productionState || 'Onbekend')
           };
         }).filter(Boolean);
 
-        if (segments.length > 0) return segments;
+        if (clamped.length === 0) {
+          const fallbackStart = Math.max(rangeStartMs, Number.isFinite(job.firstSeenTs) ? job.firstSeenTs : rangeStartMs);
+          const fallbackEnd = Math.min(rangeEndMs, Number.isFinite(job.lastSeenTs) ? job.lastSeenTs : fallbackStart + 1000);
+          if (fallbackEnd <= fallbackStart) return [];
+          return [{
+            start: fallbackStart,
+            end: fallbackEnd,
+            cls: 'unknown',
+            reason: 'Onbekend / ontbrekende timeline',
+            durationSeconds: Math.max(1, Math.round((fallbackEnd - fallbackStart) / 1000))
+          }];
+        }
 
-        const fallbackStart = Math.max(rangeStartMs, Number.isFinite(job.firstSeenTs) ? job.firstSeenTs : rangeStartMs);
-        const fallbackEnd = Math.min(rangeEndMs, Number.isFinite(job.lastSeenTs) ? job.lastSeenTs : fallbackStart + 1000);
-        if (fallbackEnd <= fallbackStart) return [];
-        return [{ start: fallbackStart, end: fallbackEnd, cls: 'unknown', reason: 'Geen timeline-events beschikbaar' }];
+        const merged = [];
+        let cursor = rangeStartMs;
+        for (const seg of clamped) {
+          if (seg.start > cursor) {
+            merged.push({
+              start: cursor,
+              end: seg.start,
+              cls: 'unknown',
+              reason: 'Onbekend / ontbrekende timeline',
+              durationSeconds: Math.max(1, Math.round((seg.start - cursor) / 1000))
+            });
+          }
+
+          const normalizedStart = Math.max(seg.start, cursor);
+          const normalizedEnd = Math.max(normalizedStart, seg.end);
+          merged.push({
+            ...seg,
+            start: normalizedStart,
+            end: normalizedEnd,
+            durationSeconds: Math.max(1, Math.round((normalizedEnd - normalizedStart) / 1000))
+          });
+          cursor = Math.max(cursor, normalizedEnd);
+        }
+
+        if (cursor < rangeEndMs) {
+          merged.push({
+            start: cursor,
+            end: rangeEndMs,
+            cls: 'unknown',
+            reason: 'Onbekend / ontbrekende timeline',
+            durationSeconds: Math.max(1, Math.round((rangeEndMs - cursor) / 1000))
+          });
+        }
+
+        return merged;
       }
+
 
       function renderWeekJobModal(jobs, weekStartMs, weekEndMs) {
         const jobName = state.selectedWeekModalJobName;
@@ -1231,8 +1292,11 @@
         els.weekJobModalTrack.innerHTML = segments.map((seg) => {
           const left = ((seg.start - rangeStart) / totalRange) * 100;
           const width = Math.max(0.6, ((seg.end - seg.start) / totalRange) * 100);
-          return `<div class="job-modal-seg ${seg.cls}" style="left:${left.toFixed(3)}%; width:${width.toFixed(3)}%"></div>`;
+          const tip = `${formatDateTime(seg.start)} → ${formatDateTime(seg.end)} | ${seg.reason} | ${formatDuration(seg.durationSeconds)}`;
+          return `<div class="job-modal-seg ${seg.cls}" data-tip="${escapeHtml(tip)}" style="left:${left.toFixed(3)}%; width:${width.toFixed(3)}%" title="${escapeHtml(tip)}"></div>`;
         }).join('');
+
+        els.weekModalTooltip.classList.add('hidden');
 
         els.weekJobModalEvents.innerHTML = segments.map((seg) => {
           return `<li>${formatDateTime(seg.start)} → ${formatDateTime(seg.end)} · <strong>${formatDuration(Math.max(1, Math.round((seg.end - seg.start)/1000)))}</strong> · ${seg.reason}</li>`;
@@ -1305,7 +1369,7 @@
               ? 0
               : (primary.uptimeSeconds / (primary.uptimeSeconds + primary.downtimeSeconds)) * 100;
 
-            const segments = getJobEventSegments(job, weekStartMs, weekEndMs).map((seg) => {
+            const segments = getJobEventSegments(job, jobRangeStart, jobRangeEnd).map((seg) => {
               const leftPct = ((seg.start - weekStartMs) / weekDuration) * 100;
               const widthPct = Math.max(0.5, ((seg.end - seg.start) / weekDuration) * 100);
               return `<div class="week-seg ${seg.cls}" style="left:${leftPct.toFixed(3)}%; width:${widthPct.toFixed(3)}%" title="${seg.reason || ''}"></div>`;
