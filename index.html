@@ -193,6 +193,7 @@
           <section class="panel">
             <h2>Timeline per week</h2>
             <div class="week-toolbar">
+              <div id="weekBadge" class="pill">Actieve week: -</div>
               <div class="field">
                 <label for="weekSelect">Kies week</label>
                 <select id="weekSelect"></select>
@@ -266,6 +267,7 @@
         weekPrevBtn: document.getElementById('weekPrevBtn'),
         weekNextBtn: document.getElementById('weekNextBtn'),
         weekDaysHeader: document.getElementById('weekDaysHeader'),
+        weekBadge: document.getElementById('weekBadge'),
         weekTimelineArea: document.getElementById('weekTimelineArea'),
         downtimeReasonTableBody: document.getElementById('downtimeReasonTableBody'),
         downtimeReasonTitle: document.getElementById('downtimeReasonTitle'),
@@ -1083,6 +1085,14 @@
         return `${formatDateTime(weekStartMs).slice(0, 10)} t/m ${formatDateTime(weekEndMs).slice(0, 10)}`;
       }
 
+      function getIsoWeekNumber(timestamp) {
+        const date = new Date(timestamp);
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
+        const week1 = new Date(date.getFullYear(), 0, 4);
+        return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+      }
+
       function shiftWeekSelection(step) {
         const options = Array.from(els.weekSelect.options || []);
         if (options.length === 0) return;
@@ -1109,6 +1119,7 @@
           state.selectedWeekKey = '';
           els.weekSelect.innerHTML = '';
           els.weekDaysHeader.innerHTML = '';
+          els.weekBadge.textContent = 'Actieve week: -';
           els.weekPrevBtn.disabled = true;
           els.weekNextBtn.disabled = true;
           els.weekTimelineArea.innerHTML = '<p class="muted">Nog geen jobs beschikbaar voor de week-timeline.</p>';
@@ -1126,10 +1137,12 @@
 
         const selectedWeek = weeks.find((w) => String(w.weekStartMs) === state.selectedWeekKey) || weeks[0];
         const selectedIndex = weeks.findIndex((w) => String(w.weekStartMs) === state.selectedWeekKey);
-        els.weekPrevBtn.disabled = selectedIndex <= 0;
-        els.weekNextBtn.disabled = selectedIndex >= weeks.length - 1;
+        els.weekPrevBtn.disabled = selectedIndex >= weeks.length - 1;
+        els.weekNextBtn.disabled = selectedIndex <= 0;
 
         const weekStartMs = selectedWeek.weekStartMs;
+        const weekNumber = getIsoWeekNumber(weekStartMs);
+        els.weekBadge.textContent = `Actieve week: ${weekNumber}`;
         const weekEndMs = weekStartMs + 7 * 24 * 3600 * 1000;
         const weekDuration = weekEndMs - weekStartMs;
 
