@@ -588,8 +588,7 @@
       els.weekTimelineArea.addEventListener('click', (event) => {
         const row = event.target.closest('[data-week-job]');
         if (!row) return;
-        state.selectedWeekModalJobName = row.dataset.weekJob;
-        render();
+        openWeekJobModal(row.dataset.weekJob);
       });
 
       els.weekJobModalClose.addEventListener('click', () => {
@@ -1316,6 +1315,12 @@
         els.weekJobModal.classList.remove('hidden');
       }
 
+      function openWeekJobModal(jobName) {
+        if (!jobName) return;
+        state.selectedWeekModalJobName = jobName;
+        render();
+      }
+
       function renderWeekTimeline(jobs) {
         const weekMap = new Map();
         for (const job of jobs) {
@@ -1386,7 +1391,7 @@
               return `<div class="week-seg ${seg.cls}" style="left:${leftPct.toFixed(3)}%; width:${widthPct.toFixed(3)}%" title="${seg.reason || ''}"></div>`;
             }).join('');
 
-            return `<div class="week-row" data-week-job="${job.jobName}">
+            return `<div class="week-row" data-week-job="${job.jobName}" role="button" tabindex="0" aria-label="Open job timeline ${job.jobName}">
               <div class="job-label" title="${job.jobName}">${job.jobName}</div>
               <div class="week-track">${segments}<span class="week-time-label">${formatDateTime(jobRangeStart).slice(11)}-${formatDateTime(jobRangeEnd).slice(11)}</span></div>
               <div class="week-right"><div class="eff">${efficiency.toFixed(1)}%</div><div class="time-range">${formatDateTime(jobRangeStart).slice(11)} → ${formatDateTime(jobRangeEnd).slice(11)}</div></div>
@@ -1396,6 +1401,14 @@
         els.weekTimelineArea.innerHTML = rows.length > 0
           ? rows.join('')
           : '<p class="muted">Geen jobs in deze week.</p>';
+
+        els.weekTimelineArea.querySelectorAll('[data-week-job]').forEach((row) => {
+          row.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            openWeekJobModal(row.dataset.weekJob);
+          });
+        });
 
         renderWeekJobModal(selectedWeek.jobs, weekStartMs, weekEndMs);
       }
