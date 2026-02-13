@@ -591,6 +591,14 @@
         openWeekJobModal(row.dataset.weekJob);
       });
 
+      els.weekTimelineArea.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const row = event.target.closest('[data-week-job]');
+        if (!row) return;
+        event.preventDefault();
+        openWeekJobModal(row.dataset.weekJob);
+      });
+
       els.weekJobModalClose.addEventListener('click', () => {
         state.selectedWeekModalJobName = '';
         render();
@@ -1401,14 +1409,6 @@
         els.weekTimelineArea.innerHTML = rows.length > 0
           ? rows.join('')
           : '<p class="muted">Geen jobs in deze week.</p>';
-
-        els.weekTimelineArea.querySelectorAll('[data-week-job]').forEach((row) => {
-          row.addEventListener('keydown', (event) => {
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            openWeekJobModal(row.dataset.weekJob);
-          });
-        });
 
         renderWeekJobModal(selectedWeek.jobs, weekStartMs, weekEndMs);
       }
