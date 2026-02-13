@@ -34,6 +34,10 @@
       .seg.ready { background:#f6c547; }
       .seg.other { background:#e34b4b; }
       .reason-row { display:grid; grid-template-columns: 1fr 80px; align-items: center; gap:.75rem; margin-bottom:.5rem; }
+      .reason-row.clickable { cursor:pointer; padding:.35rem; border-radius:8px; border:1px solid transparent; }
+      .reason-row.clickable.active-reason { background:#eef5ff; border-color:#cfe1ff; }
+      .cross-layout { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:1rem; }
+      @media (max-width: 1100px) { .cross-layout { grid-template-columns:1fr; } }
       #jobSelect { margin: .5rem 0 1rem; padding: .5rem; }
       .meta { display:flex; flex-wrap:wrap; gap:.5rem; }
       .pill { padding:.2rem .55rem; border-radius:999px; background:#eaf1ff; color:#275299; font-size:.8rem; font-weight:600; }
@@ -161,7 +165,14 @@
             <select id="jobSelect"></select>
             <div id="selectedJobStats"></div>
             <h3>Downtime oorzaken (timeline)</h3>
-            <div id="reasonBreakdown"></div>
+            <div class="cross-layout">
+              <div id="reasonBreakdown"></div>
+              <aside class="job-detail" id="crossReasonDetailPanel">
+                <h3>Events van downtime-reden</h3>
+                <p id="crossReasonTitle" class="muted">Klik op een downtime oorzaak in de lijst.</p>
+                <ul id="crossReasonEvents" class="downtime-events"></ul>
+              </aside>
+            </div>
           </section>
         </section>
 
@@ -204,6 +215,8 @@
         jobSelect: document.getElementById('jobSelect'),
         selectedJobStats: document.getElementById('selectedJobStats'),
         reasonBreakdown: document.getElementById('reasonBreakdown'),
+        crossReasonTitle: document.getElementById('crossReasonTitle'),
+        crossReasonEvents: document.getElementById('crossReasonEvents'),
         jobFilterInput: document.getElementById('jobFilterInput'),
         sortBySelect: document.getElementById('sortBySelect'),
         jobDetailTitle: document.getElementById('jobDetailTitle'),
@@ -230,7 +243,8 @@
         tableSortBy: 'date_desc',
         selectedJobName: '',
         activeTab: 'import',
-        selectedDowntimeReason: ''
+        selectedDowntimeReason: '',
+        selectedCrossReason: ''
       };
 
       const HEADERS = {
@@ -407,6 +421,13 @@
 
       els.sortBySelect.addEventListener('change', (event) => {
         state.tableSortBy = event.target.value;
+        render();
+      });
+
+      els.reasonBreakdown.addEventListener('click', (event) => {
+        const row = event.target.closest('[data-cross-reason]');
+        if (!row) return;
+        state.selectedCrossReason = row.dataset.crossReason;
         render();
       });
 
@@ -1029,14 +1050,39 @@
 
         const reasons = Array.from(t.reasons.entries()).sort((a,b)=>b[1]-a[1]);
         if (reasons.length === 0) {
+          state.selectedCrossReason = '';
           els.reasonBreakdown.innerHTML = '<p class="muted">Geen downtime oorzaken in timeline voor deze job.</p>';
+          els.crossReasonTitle.textContent = 'Geen downtime oorzaken beschikbaar voor deze job.';
+          els.crossReasonEvents.innerHTML = '<li class="muted">Geen events om te tonen.</li>';
           return;
+        }
+
+        if (!reasons.some(([reason]) => reason === state.selectedCrossReason)) {
+          state.selectedCrossReason = reasons[0][0];
         }
 
         els.reasonBreakdown.innerHTML = reasons.map(([reason, sec]) => {
           const pct = t.downtimeSeconds === 0 ? 0 : (sec / t.downtimeSeconds) * 100;
-          return `<div class="reason-row"><div><div>${reason} (${formatDuration(sec)})</div><div class="progress"><span style="width:${pct.toFixed(2)}%"></span></div></div><strong>${pct.toFixed(1)}%</strong></div>`;
+          const activeClass = reason === state.selectedCrossReason ? 'active-reason' : '';
+          return `<div class="reason-row clickable ${activeClass}" data-cross-reason="${reason}"><div><div>${reason} (${formatDuration(sec)})</div><div class="progress"><span style="width:${pct.toFixed(2)}%"></span></div></div><strong>${pct.toFixed(1)}%</strong></div>`;
         }).join('');
+
+        const selectedReason = state.selectedCrossReason;
+        const events = state.timelineEvents
+          .filter((event) => event.jobName === job.jobName && event.reason === selectedReason)
+          .sort((a, b) => (b.startTimestamp || 0) - (a.startTimestamp || 0));
+        const total = events.reduce((sum, event) => sum + event.durationSeconds, 0);
+
+        els.crossReasonTitle.innerHTML = `<strong>${selectedReason}</strong><br><span class="muted">${events.length} keer · totale duur ${formatDuration(total)}</span>`;
+
+        if (events.length === 0) {
+          els.crossReasonEvents.innerHTML = '<li class="muted">Geen events gevonden voor deze downtime-reden.</li>';
+          return;
+        }
+
+        els.crossReasonEvents.innerHTML = events
+          .map((event) => `<li>${formatDateTime(event.startTimestamp)} · duur: <strong>${formatDuration(event.durationSeconds)}</strong></li>`)
+          .join('');
       }
 
       render();

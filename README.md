@@ -27,6 +27,7 @@ Kleine webapp om `timeline.csv` én `jobstatistics.csv` te laden en machine-effi
 - De efficiëntiebalk in de tabel gebruikt dezelfde kleuren als de pie chart: uptime groen, ReadyNoProductFeed geel, overige downtime rood (van links naar rechts).
 - Er is een 2e tabblad **Downtime redenen** met alle downtime-redenen onder elkaar en de opgetelde downtime.
 - In tab **Downtime redenen** kun je op een reden klikken en rechts per voorval zien in welke job dit gebeurde en hoe lang het duurde.
+- In **Dwarsdoorsnede per job** kun je nu op een downtime-oorzaak klikken en rechts per event zien wanneer dit gebeurde en hoe lang het duurde.
 - Het rechter detailpaneel blijft sticky zichtbaar tijdens scrollen op grotere schermen.
 - Layout gebruikt nu de volledige paginabreedte en schaalt responsief mee op desktop/tablet/mobiel.
 - Werkt direct via dubbelklik op `index.html` (zonder bash/server).
