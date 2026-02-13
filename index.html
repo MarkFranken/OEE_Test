@@ -238,6 +238,7 @@
         signatures: new Set(),
         loadedFiles: [],
         timelineEvents: [],
+        timelineEventKeys: new Set(),
         jobStatisticsRows: [],
         tableFilterText: '',
         tableSortBy: 'date_desc',
@@ -385,7 +386,14 @@
 
           state.signatures.add(signature);
           state.loadedFiles.push({ name: file.name, type: parsed.type });
-          if (parsed.type === 'timeline') state.timelineEvents.push(...parsed.rows);
+          if (parsed.type === 'timeline') {
+            for (const row of parsed.rows) {
+              const key = getTimelineEventKey(row);
+              if (state.timelineEventKeys.has(key)) continue;
+              state.timelineEventKeys.add(key);
+              state.timelineEvents.push(row);
+            }
+          }
           if (parsed.type === 'jobStats') state.jobStatisticsRows.push(...parsed.rows);
           added += 1;
         }
@@ -398,6 +406,7 @@
         state.signatures.clear();
         state.loadedFiles = [];
         state.timelineEvents = [];
+        state.timelineEventKeys.clear();
         state.jobStatisticsRows = [];
         render({ added: 0, duplicates: 0, unsupported: 0 });
       });
@@ -567,6 +576,16 @@
         const hh = String(d.getHours()).padStart(2, '0');
         const mm = String(d.getMinutes()).padStart(2, '0');
         return `${y}-${m}-${day} ${hh}:${mm}`;
+      }
+
+      function getTimelineEventKey(event) {
+        return [
+          event.jobName || '',
+          event.startTime || '',
+          event.productionState || '',
+          event.reason || '',
+          event.durationSeconds || 0
+        ].join('|');
       }
 
       function aggregateByJob() {
