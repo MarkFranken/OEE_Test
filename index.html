@@ -64,6 +64,13 @@
       .downtime-events li { line-height:1.35; }
       .downtime-table tbody tr { cursor:pointer; }
       .downtime-table tbody tr.active-row { background:#eef5ff; }
+      .week-toolbar { display:flex; gap:.6rem; align-items:end; flex-wrap:wrap; margin-bottom:.8rem; }
+      .week-timeline { display:grid; gap:.5rem; }
+      .week-row { display:grid; grid-template-columns: 150px minmax(0,1fr) 90px; gap:.6rem; align-items:center; }
+      .week-row .job-label { font-weight:600; color:#1f3552; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .week-track { position:relative; height:28px; background:#eff3f9; border-radius:999px; overflow:hidden; }
+      .week-bar { position:absolute; top:0; bottom:0; border-radius:999px; background:linear-gradient(90deg,#1768ff,#23c29f); display:flex; align-items:center; padding:0 .5rem; color:#fff; font-size:.78rem; font-weight:600; white-space:nowrap; overflow:hidden; }
+      .week-eff { font-weight:700; color:#1f3552; text-align:right; }
       .tabs { display:flex; gap:.5rem; margin-top:1rem; }
       .tab-btn { border:1px solid #cfd9e6; background:#fff; color:#1f3552; border-radius:10px; padding:.5rem .8rem; cursor:pointer; font-weight:600; }
       .tab-btn.active { background:#1768ff; color:#fff; border-color:#1768ff; }
@@ -82,6 +89,7 @@
       <div class="tabs" role="tablist" aria-label="Dashboard tabs">
         <button id="tabImportBtn" class="tab-btn active" type="button" role="tab" aria-selected="true">Importeren</button>
         <button id="tabOverviewBtn" class="tab-btn" type="button" role="tab" aria-selected="false">Overzicht</button>
+        <button id="tabWeekBtn" class="tab-btn" type="button" role="tab" aria-selected="false">Week timeline</button>
         <button id="tabDowntimeBtn" class="tab-btn" type="button" role="tab" aria-selected="false">Downtime redenen</button>
       </div>
 
@@ -176,6 +184,20 @@
           </section>
         </section>
 
+
+        <section id="weekTab" class="tab-pane hidden">
+          <section class="panel">
+            <h2>Timeline per week</h2>
+            <div class="week-toolbar">
+              <div class="field">
+                <label for="weekSelect">Kies week</label>
+                <select id="weekSelect"></select>
+              </div>
+            </div>
+            <div id="weekTimelineArea" class="week-timeline"></div>
+          </section>
+        </section>
+
         <section id="downtimeTab" class="tab-pane hidden">
           <section class="panel">
             <h2>Totale downtime per reden</h2>
@@ -225,10 +247,14 @@
         jobDowntimeList: document.getElementById('jobDowntimeList'),
         tabImportBtn: document.getElementById('tabImportBtn'),
         tabOverviewBtn: document.getElementById('tabOverviewBtn'),
+        tabWeekBtn: document.getElementById('tabWeekBtn'),
         tabDowntimeBtn: document.getElementById('tabDowntimeBtn'),
         importTab: document.getElementById('importTab'),
         overviewTab: document.getElementById('overviewTab'),
+        weekTab: document.getElementById('weekTab'),
         downtimeTab: document.getElementById('downtimeTab'),
+        weekSelect: document.getElementById('weekSelect'),
+        weekTimelineArea: document.getElementById('weekTimelineArea'),
         downtimeReasonTableBody: document.getElementById('downtimeReasonTableBody'),
         downtimeReasonTitle: document.getElementById('downtimeReasonTitle'),
         downtimeReasonEvents: document.getElementById('downtimeReasonEvents')
@@ -245,7 +271,8 @@
         selectedJobName: '',
         activeTab: 'import',
         selectedDowntimeReason: '',
-        selectedCrossReason: ''
+        selectedCrossReason: '',
+        selectedWeekKey: ''
       };
 
       const HEADERS = {
@@ -457,8 +484,18 @@
         render();
       });
 
+      els.tabWeekBtn.addEventListener('click', () => {
+        state.activeTab = 'week';
+        render();
+      });
+
       els.tabDowntimeBtn.addEventListener('click', () => {
         state.activeTab = 'downtime';
+        render();
+      });
+
+      els.weekSelect.addEventListener('change', (event) => {
+        state.selectedWeekKey = event.target.value;
         render();
       });
 
@@ -675,6 +712,7 @@
         renderJobSelector(filteredSortedJobs, selectedJobName);
         renderJobSideDetail(jobs.find((j) => j.jobName === selectedJobName));
         renderCrossSection(selectedJobName);
+        renderWeekTimeline(jobs);
         renderDowntimeReasonsTab(jobs);
         renderDowntimeReasonDetail(jobs);
         renderTabs();
@@ -1012,22 +1050,101 @@
           .join('');
       }
 
+      function getStartOfWeek(timestamp) {
+        const date = new Date(timestamp);
+        const day = (date.getDay() + 6) % 7;
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() - day);
+        return date.getTime();
+      }
+
+      function formatWeekLabel(weekStartMs) {
+        const weekEndMs = weekStartMs + 6 * 24 * 3600 * 1000;
+        return `${formatDateTime(weekStartMs).slice(0, 10)} t/m ${formatDateTime(weekEndMs).slice(0, 10)}`;
+      }
+
+      function renderWeekTimeline(jobs) {
+        const weekMap = new Map();
+        for (const job of jobs) {
+          const baseTs = Number.isFinite(job.firstSeenTs) ? job.firstSeenTs : job.lastSeenTs;
+          if (!Number.isFinite(baseTs)) continue;
+          const weekStartMs = getStartOfWeek(baseTs);
+          const key = String(weekStartMs);
+          if (!weekMap.has(key)) weekMap.set(key, { weekStartMs, jobs: [] });
+          weekMap.get(key).jobs.push(job);
+        }
+
+        const weeks = Array.from(weekMap.values()).sort((a, b) => b.weekStartMs - a.weekStartMs);
+        if (weeks.length === 0) {
+          state.selectedWeekKey = '';
+          els.weekSelect.innerHTML = '';
+          els.weekTimelineArea.innerHTML = '<p class="muted">Nog geen jobs beschikbaar voor de week-timeline.</p>';
+          return;
+        }
+
+        if (!weeks.some((w) => String(w.weekStartMs) === state.selectedWeekKey)) {
+          state.selectedWeekKey = String(weeks[0].weekStartMs);
+        }
+
+        els.weekSelect.innerHTML = weeks
+          .map((w) => `<option value="${w.weekStartMs}">${formatWeekLabel(w.weekStartMs)}</option>`)
+          .join('');
+        els.weekSelect.value = state.selectedWeekKey;
+
+        const selectedWeek = weeks.find((w) => String(w.weekStartMs) === state.selectedWeekKey) || weeks[0];
+        const weekStartMs = selectedWeek.weekStartMs;
+        const weekEndMs = weekStartMs + 7 * 24 * 3600 * 1000;
+        const weekDuration = weekEndMs - weekStartMs;
+
+        const rows = selectedWeek.jobs
+          .slice()
+          .sort((a, b) => a.firstSeenTs - b.firstSeenTs)
+          .map((job) => {
+            const startMs = Math.max(weekStartMs, Number.isFinite(job.firstSeenTs) ? job.firstSeenTs : weekStartMs);
+            const endMs = Math.min(weekEndMs, Number.isFinite(job.lastSeenTs) ? job.lastSeenTs : startMs + 1);
+            const widthPct = Math.max(0.8, ((endMs - startMs) / weekDuration) * 100);
+            const leftPct = Math.max(0, ((startMs - weekStartMs) / weekDuration) * 100);
+            const primary = getPrimaryTimes(job);
+            const efficiency = primary.uptimeSeconds + primary.downtimeSeconds === 0
+              ? 0
+              : (primary.uptimeSeconds / (primary.uptimeSeconds + primary.downtimeSeconds)) * 100;
+
+            return `<div class="week-row">
+              <div class="job-label" title="${job.jobName}">${job.jobName}</div>
+              <div class="week-track">
+                <div class="week-bar" style="left:${leftPct.toFixed(2)}%; width:${widthPct.toFixed(2)}%;">
+                  ${formatDateTime(startMs).slice(11)} - ${formatDateTime(endMs).slice(11)}
+                </div>
+              </div>
+              <div class="week-eff">${efficiency.toFixed(1)}%</div>
+            </div>`;
+          });
+
+        els.weekTimelineArea.innerHTML = rows.length > 0
+          ? rows.join('')
+          : '<p class="muted">Geen jobs in deze week.</p>';
+      }
+
       function renderTabs() {
         const active = state.activeTab;
         const showImport = active === 'import';
         const showOverview = active === 'overview';
+        const showWeek = active === 'week';
         const showDowntime = active === 'downtime';
 
         els.tabImportBtn.classList.toggle('active', showImport);
         els.tabOverviewBtn.classList.toggle('active', showOverview);
+        els.tabWeekBtn.classList.toggle('active', showWeek);
         els.tabDowntimeBtn.classList.toggle('active', showDowntime);
 
         els.tabImportBtn.setAttribute('aria-selected', showImport ? 'true' : 'false');
         els.tabOverviewBtn.setAttribute('aria-selected', showOverview ? 'true' : 'false');
+        els.tabWeekBtn.setAttribute('aria-selected', showWeek ? 'true' : 'false');
         els.tabDowntimeBtn.setAttribute('aria-selected', showDowntime ? 'true' : 'false');
 
         els.importTab.classList.toggle('hidden', !showImport);
         els.overviewTab.classList.toggle('hidden', !showOverview);
+        els.weekTab.classList.toggle('hidden', !showWeek);
         els.downtimeTab.classList.toggle('hidden', !showDowntime);
       }
 
