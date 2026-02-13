@@ -65,6 +65,10 @@
       .downtime-table tbody tr { cursor:pointer; }
       .downtime-table tbody tr.active-row { background:#eef5ff; }
       .week-toolbar { display:flex; gap:.6rem; align-items:end; flex-wrap:wrap; margin-bottom:.8rem; }
+      .week-nav { display:flex; gap:.4rem; }
+      .week-days { display:grid; grid-template-columns: 150px minmax(0,1fr) 90px; gap:.6rem; align-items:end; margin-bottom:.35rem; color:#4f6478; font-size:.82rem; }
+      .week-days-grid { display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap:.2rem; }
+      .week-day { text-align:center; padding:.2rem 0; }
       .week-timeline { display:grid; gap:.5rem; }
       .week-row { display:grid; grid-template-columns: 150px minmax(0,1fr) 90px; gap:.6rem; align-items:center; }
       .week-row .job-label { font-weight:600; color:#1f3552; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -193,7 +197,12 @@
                 <label for="weekSelect">Kies week</label>
                 <select id="weekSelect"></select>
               </div>
+              <div class="week-nav">
+                <button id="weekPrevBtn" class="button secondary" type="button">← Eerdere week</button>
+                <button id="weekNextBtn" class="button secondary" type="button">Latere week →</button>
+              </div>
             </div>
+            <div id="weekDaysHeader" class="week-days"></div>
             <div id="weekTimelineArea" class="week-timeline"></div>
           </section>
         </section>
@@ -254,6 +263,9 @@
         weekTab: document.getElementById('weekTab'),
         downtimeTab: document.getElementById('downtimeTab'),
         weekSelect: document.getElementById('weekSelect'),
+        weekPrevBtn: document.getElementById('weekPrevBtn'),
+        weekNextBtn: document.getElementById('weekNextBtn'),
+        weekDaysHeader: document.getElementById('weekDaysHeader'),
         weekTimelineArea: document.getElementById('weekTimelineArea'),
         downtimeReasonTableBody: document.getElementById('downtimeReasonTableBody'),
         downtimeReasonTitle: document.getElementById('downtimeReasonTitle'),
@@ -497,6 +509,14 @@
       els.weekSelect.addEventListener('change', (event) => {
         state.selectedWeekKey = event.target.value;
         render();
+      });
+
+      els.weekPrevBtn.addEventListener('click', () => {
+        shiftWeekSelection(1);
+      });
+
+      els.weekNextBtn.addEventListener('click', () => {
+        shiftWeekSelection(-1);
       });
 
       function splitCsvLine(line) { return line.split(','); }
@@ -1063,6 +1083,16 @@
         return `${formatDateTime(weekStartMs).slice(0, 10)} t/m ${formatDateTime(weekEndMs).slice(0, 10)}`;
       }
 
+      function shiftWeekSelection(step) {
+        const options = Array.from(els.weekSelect.options || []);
+        if (options.length === 0) return;
+        const currentIndex = options.findIndex((opt) => opt.value === state.selectedWeekKey);
+        const from = currentIndex >= 0 ? currentIndex : 0;
+        const next = Math.max(0, Math.min(options.length - 1, from + step));
+        state.selectedWeekKey = options[next].value;
+        render();
+      }
+
       function renderWeekTimeline(jobs) {
         const weekMap = new Map();
         for (const job of jobs) {
@@ -1078,6 +1108,9 @@
         if (weeks.length === 0) {
           state.selectedWeekKey = '';
           els.weekSelect.innerHTML = '';
+          els.weekDaysHeader.innerHTML = '';
+          els.weekPrevBtn.disabled = true;
+          els.weekNextBtn.disabled = true;
           els.weekTimelineArea.innerHTML = '<p class="muted">Nog geen jobs beschikbaar voor de week-timeline.</p>';
           return;
         }
@@ -1092,9 +1125,20 @@
         els.weekSelect.value = state.selectedWeekKey;
 
         const selectedWeek = weeks.find((w) => String(w.weekStartMs) === state.selectedWeekKey) || weeks[0];
+        const selectedIndex = weeks.findIndex((w) => String(w.weekStartMs) === state.selectedWeekKey);
+        els.weekPrevBtn.disabled = selectedIndex <= 0;
+        els.weekNextBtn.disabled = selectedIndex >= weeks.length - 1;
+
         const weekStartMs = selectedWeek.weekStartMs;
         const weekEndMs = weekStartMs + 7 * 24 * 3600 * 1000;
         const weekDuration = weekEndMs - weekStartMs;
+
+        const dayNames = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+        const dayCells = dayNames.map((name, idx) => {
+          const dayTs = weekStartMs + idx * 24 * 3600 * 1000;
+          return `<div class="week-day"><strong>${name}</strong><br>${formatDateTime(dayTs).slice(0, 10)}</div>`;
+        }).join('');
+        els.weekDaysHeader.innerHTML = `<div></div><div class="week-days-grid">${dayCells}</div><div style="text-align:right;">Eff.</div>`;
 
         const rows = selectedWeek.jobs
           .slice()
