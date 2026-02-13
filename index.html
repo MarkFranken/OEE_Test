@@ -6,30 +6,34 @@
     <title>Machine Timeline Dashboard</title>
     <style>
       :root {
-        --brand-navy: #0b2a57;
-        --brand-navy-2: #123f7f;
-        --brand-orange: #f28c00;
-        --brand-bg: #f3f6fb;
+        --brand-navy: #36454f;
+        --brand-orange: #f28c1c;
+        --brand-bg: #f4f4f4;
         --brand-card: #ffffff;
-        --brand-border: #d8e1ee;
-        --brand-text: #1a2b44;
-        --brand-muted: #5a6e87;
+        --brand-border: #e1e1e1;
+        --brand-text: #3f4c56;
+        --brand-muted: #687883;
         font-family: "Inter", "Segoe UI", Roboto, sans-serif;
         color: var(--brand-text);
         background: var(--brand-bg);
       }
-      body { margin: 0; background: radial-gradient(circle at top right, #e6eef9 0%, #f6f8fc 38%, #f3f6fb 100%); }
-      .container { width: 100%; max-width: none; margin: 0; padding: 1rem 1rem 2rem; box-sizing: border-box; }
+      body { margin: 0; background: #efefef; }
+      .container { width: 100%; max-width: none; margin: 0; padding: 0 1rem 2rem; box-sizing: border-box; }
       h1,h2,h3 { margin-top: 0; color: var(--brand-navy); letter-spacing: .01em; }
       h2 { border-left: 4px solid var(--brand-orange); padding-left: .45rem; }
-      header h1 { font-weight: 800; }
-      .panel { background: var(--brand-card); border: 1px solid var(--brand-border); border-radius: 14px; padding: 1rem; margin-top: 1rem; box-shadow: 0 8px 22px rgba(11,42,87,0.08); }
+      header { background:#fff; border-top:4px solid #2f363b; margin:0 -1rem 1rem; padding:0 1rem 1rem; box-shadow:0 2px 8px rgba(0,0,0,.05); }
+      .topbar { display:flex; align-items:center; justify-content:space-between; min-height:82px; }
+      .brand-logo { display:inline-flex; align-items:center; gap:.45rem; color:#4a5962; text-decoration:none; font-size:2.1rem; font-weight:800; letter-spacing:.04em; }
+      .brand-mark { width:20px; height:20px; transform:rotate(45deg); background:var(--brand-orange); position:relative; margin-left:.15rem; }
+      .brand-mark::after { content:""; position:absolute; width:14px; height:14px; right:-11px; bottom:-11px; background:#4a5962; }
+      .header-copy { max-width:840px; padding-bottom:.2rem; }
+      .panel { background: var(--brand-card); border: 1px solid var(--brand-border); border-radius: 14px; padding: 1rem; margin-top: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
       .uploader { display: grid; gap: .75rem; }
-      .button { border: none; background: linear-gradient(135deg, var(--brand-navy), var(--brand-navy-2)); color: #fff; border-radius: 10px; padding: .65rem .95rem; font-weight: 700; cursor: pointer; width: fit-content; box-shadow: 0 4px 12px rgba(11,42,87,.18); }
-      .button.secondary { background: #e8edf6; color: var(--brand-navy); border: 1px solid #c9d6ea; box-shadow: none; }
+      .button { border: none; background: var(--brand-orange); color: #fff; border-radius: 0; padding: .72rem 1.05rem; font-weight: 700; cursor: pointer; width: fit-content; text-transform: uppercase; letter-spacing: .04em; }
+      .button.secondary { background: var(--brand-orange); color: #fff; border: none; border-radius: 0; }
       #fileInput { display: none; }
-      .button:hover { filter: brightness(1.05); transform: translateY(-1px); transition: .15s ease; }
-      .button.secondary:hover { background:#dce7f7; }
+      .button:hover { filter: brightness(1.05); transition: .15s ease; }
+      .button.secondary:hover { filter: brightness(1.05); }
       .status,.muted { color: var(--brand-muted); margin: 0; }
       .loaded-files { margin: 0; padding-left: 1rem; }
       .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .75rem; }
@@ -108,8 +112,8 @@
       .timeline-tooltip { position: fixed; z-index: 60; pointer-events: none; max-width: 360px; background: rgba(10,22,38,.96); color: #fff; border-radius: 8px; padding: .45rem .55rem; font-size: .78rem; line-height: 1.35; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
       .job-modal-events { margin:0; padding-left:1rem; display:grid; gap:.3rem; }
       .tabs { display:flex; gap:.5rem; margin-top:1rem; }
-      .tab-btn { border:1px solid #c9d7ea; background:#fff; color:var(--brand-navy); border-radius:10px; padding:.5rem .8rem; cursor:pointer; font-weight:700; }
-      .tab-btn.active { background: linear-gradient(135deg, var(--brand-navy), var(--brand-navy-2)); color:#fff; border-color:var(--brand-navy); }
+      .tab-btn { border:0; background:transparent; color:#4a5962; border-radius:0; padding:.6rem .85rem; cursor:pointer; font-weight:700; text-transform:uppercase; letter-spacing:.03em; border-bottom:3px solid transparent; }
+      .tab-btn.active { color:var(--brand-orange); border-bottom-color:var(--brand-orange); }
       .tab-content { margin-top:.75rem; }
       .tab-pane.hidden { display:none; }
 
@@ -118,8 +122,15 @@
   <body>
     <main class="container">
       <header>
-        <h1>Machine Timeline Dashboard</h1>
-        <p>Laad zowel <code>Timeline CSV</code> als <code>JobStatistics CSV</code> in. Dubbele bestanden worden automatisch geweigerd.</p>
+        <div class="topbar">
+          <a class="brand-logo" href="https://www.c-tech.nl/" target="_blank" rel="noopener noreferrer" aria-label="C-TECH website">
+            <span>C-TECH</span><span class="brand-mark" aria-hidden="true"></span>
+          </a>
+        </div>
+        <div class="header-copy">
+          <h1>Machine Timeline Dashboard</h1>
+          <p>Laad zowel <code>Timeline CSV</code> als <code>JobStatistics CSV</code> in. Dubbele bestanden worden automatisch geweigerd.</p>
+        </div>
       </header>
 
       <div class="tabs" role="tablist" aria-label="Dashboard tabs">
