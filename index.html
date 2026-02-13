@@ -350,7 +350,10 @@
         selectedDowntimeReason: '',
         selectedCrossReason: '',
         selectedWeekKey: '',
-        selectedWeekModalJobName: ''
+        selectedWeekModalJobName: '',
+        weekModalJobs: [],
+        weekModalStartMs: 0,
+        weekModalEndMs: 0
       };
 
       const HEADERS = {
@@ -601,13 +604,13 @@
 
       els.weekJobModalClose.addEventListener('click', () => {
         state.selectedWeekModalJobName = '';
-        render();
+        els.weekJobModal.classList.add('hidden');
       });
 
       els.weekJobModal.addEventListener('click', (event) => {
         if (event.target !== els.weekJobModal) return;
         state.selectedWeekModalJobName = '';
-        render();
+        els.weekJobModal.classList.add('hidden');
       });
 
 
@@ -1326,7 +1329,11 @@
       function openWeekJobModal(jobName) {
         if (!jobName) return;
         state.selectedWeekModalJobName = jobName;
-        render();
+        if (!Array.isArray(state.weekModalJobs) || state.weekModalJobs.length === 0) {
+          render();
+          return;
+        }
+        renderWeekJobModal(state.weekModalJobs, state.weekModalStartMs, state.weekModalEndMs);
       }
 
       function renderWeekTimeline(jobs) {
@@ -1343,6 +1350,9 @@
         const weeks = Array.from(weekMap.values()).sort((a, b) => b.weekStartMs - a.weekStartMs);
         if (weeks.length === 0) {
           state.selectedWeekKey = '';
+          state.weekModalJobs = [];
+          state.weekModalStartMs = 0;
+          state.weekModalEndMs = 0;
           els.weekSelect.innerHTML = '';
           els.weekDaysHeader.innerHTML = '';
           els.weekBadge.textContent = 'Actieve week: -';
@@ -1410,6 +1420,9 @@
           ? rows.join('')
           : '<p class="muted">Geen jobs in deze week.</p>';
 
+        state.weekModalJobs = selectedWeek.jobs;
+        state.weekModalStartMs = weekStartMs;
+        state.weekModalEndMs = weekEndMs;
         renderWeekJobModal(selectedWeek.jobs, weekStartMs, weekEndMs);
       }
 
