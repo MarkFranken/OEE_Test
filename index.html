@@ -101,7 +101,15 @@
       .week-right { text-align:right; color:var(--brand-navy); font-size:.82rem; }
       .week-right .eff { font-weight:700; }
       .week-right .time-range { color:var(--brand-muted); font-size:.76rem; }
-      .modal.hidden { display:none; }
+      
+      .speed-toolbar { display:flex; gap:.6rem; align-items:end; flex-wrap:wrap; margin-bottom:.8rem; }
+      .speed-chart { display:grid; gap:.55rem; }
+      .speed-row { display:grid; grid-template-columns: 190px minmax(0,1fr) 110px; gap:.65rem; align-items:center; }
+      .speed-job { font-weight:600; color:var(--brand-navy); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .speed-track { position:relative; height:24px; background:#edf2f8; border-radius:8px; overflow:hidden; border:1px solid #d7e2f2; }
+      .speed-bar { position:absolute; inset:0 auto 0 0; background:linear-gradient(90deg,#f28c1c,#ffb14a); }
+      .speed-value { text-align:right; font-weight:700; color:var(--brand-navy); }
+.modal.hidden { display:none; }
       .modal { position:fixed; inset:0; background:rgba(8,19,32,.48); display:flex; align-items:center; justify-content:center; z-index:20; padding:1rem; }
       .modal-card { width:min(1100px,96vw); max-height:90vh; overflow:auto; background:#fff; border-radius:14px; box-shadow:0 10px 35px rgba(20,35,59,.25); padding:1rem; }
       .modal-header { display:flex; justify-content:space-between; align-items:center; gap:.8rem; }
@@ -140,6 +148,7 @@
         <button id="tabOverviewBtn" class="tab-btn active" type="button" role="tab" aria-selected="true">Overzicht</button>
         <button id="tabWeekBtn" class="tab-btn" type="button" role="tab" aria-selected="false">Week timeline</button>
         <button id="tabDowntimeBtn" class="tab-btn" type="button" role="tab" aria-selected="false">Downtime redenen</button>
+        <button id="tabSpeedBtn" class="tab-btn" type="button" role="tab" aria-selected="false">Snelheid</button>
         <button id="tabImportBtn" class="tab-btn" type="button" role="tab" aria-selected="false">Importeren</button>
       </div>
 
@@ -267,6 +276,24 @@
           </section>
         </section>
 
+        <section id="speedTab" class="tab-pane hidden">
+          <section class="panel">
+            <h2>Snelheid per week</h2>
+            <div class="speed-toolbar">
+              <div id="speedWeekBadge" class="pill">Actieve week: -</div>
+              <div class="field">
+                <label for="speedWeekSelect">Kies week</label>
+                <select id="speedWeekSelect"></select>
+              </div>
+              <div class="week-nav">
+                <button id="speedWeekPrevBtn" class="button secondary" type="button">← Eerdere week</button>
+                <button id="speedWeekNextBtn" class="button secondary" type="button">Latere week →</button>
+              </div>
+            </div>
+            <div id="speedChartArea" class="speed-chart"></div>
+          </section>
+        </section>
+
         <section id="downtimeTab" class="tab-pane hidden">
           <section class="panel">
             <h2>Totale downtime per reden</h2>
@@ -318,9 +345,11 @@
         tabOverviewBtn: document.getElementById('tabOverviewBtn'),
         tabWeekBtn: document.getElementById('tabWeekBtn'),
         tabDowntimeBtn: document.getElementById('tabDowntimeBtn'),
+        tabSpeedBtn: document.getElementById('tabSpeedBtn'),
         importTab: document.getElementById('importTab'),
         overviewTab: document.getElementById('overviewTab'),
         weekTab: document.getElementById('weekTab'),
+        speedTab: document.getElementById('speedTab'),
         downtimeTab: document.getElementById('downtimeTab'),
         weekSelect: document.getElementById('weekSelect'),
         weekPrevBtn: document.getElementById('weekPrevBtn'),
@@ -335,6 +364,11 @@
         weekModalTooltip: document.getElementById('weekModalTooltip'),
         weekJobModalEvents: document.getElementById('weekJobModalEvents'),
         weekJobModalClose: document.getElementById('weekJobModalClose'),
+        speedWeekSelect: document.getElementById('speedWeekSelect'),
+        speedWeekPrevBtn: document.getElementById('speedWeekPrevBtn'),
+        speedWeekNextBtn: document.getElementById('speedWeekNextBtn'),
+        speedWeekBadge: document.getElementById('speedWeekBadge'),
+        speedChartArea: document.getElementById('speedChartArea'),
         downtimeReasonTableBody: document.getElementById('downtimeReasonTableBody'),
         downtimeReasonTitle: document.getElementById('downtimeReasonTitle'),
         downtimeReasonEvents: document.getElementById('downtimeReasonEvents')
@@ -354,6 +388,7 @@
         selectedCrossReason: '',
         selectedWeekKey: '',
         selectedWeekModalJobName: '',
+        selectedSpeedWeekKey: '',
         weekModalJobs: [],
         weekModalStartMs: 0,
         weekModalEndMs: 0
@@ -578,8 +613,18 @@
         render();
       });
 
+      els.tabSpeedBtn.addEventListener('click', () => {
+        state.activeTab = 'speed';
+        render();
+      });
+
       els.weekSelect.addEventListener('change', (event) => {
         state.selectedWeekKey = event.target.value;
+        render();
+      });
+
+      els.speedWeekSelect.addEventListener('change', (event) => {
+        state.selectedSpeedWeekKey = event.target.value;
         render();
       });
 
@@ -589,6 +634,14 @@
 
       els.weekNextBtn.addEventListener('click', () => {
         shiftWeekSelection(-1);
+      });
+
+      els.speedWeekPrevBtn.addEventListener('click', () => {
+        shiftSpeedWeekSelection(1);
+      });
+
+      els.speedWeekNextBtn.addEventListener('click', () => {
+        shiftSpeedWeekSelection(-1);
       });
 
       els.weekTimelineArea.addEventListener('click', (event) => {
@@ -649,7 +702,7 @@
         const value = (reason || '').trim();
         const match = value.match(/^(.*?):\s*(\d+)$/);
         if (!match) {
-          return value || 'Onbekend';
+          return value;
         }
 
         const [, prefix, alarmCodeText] = match;
@@ -671,15 +724,17 @@
         if (timelineIdx !== -1) {
           const rows = lines.slice(timelineIdx + 1).map((line) => {
             const [startTime, shiftId, productionState, reason, duration, jobName] = splitCsvLine(line);
+            const startTimeValue = (startTime || '').trim();
+            const durationSeconds = durationToSeconds(duration);
             return {
-              startTime,
-              startTimestamp: parseDateTime(startTime),
-              shiftId,
-              productionState,
+              startTime: startTimeValue,
+              startTimestamp: parseDateTime(startTimeValue),
+              shiftId: (shiftId || '').trim(),
+              productionState: (productionState || '').trim(),
               reason: formatDowntimeReason(reason),
-              durationSeconds: durationToSeconds(duration),
-              jobName,
-              endTimestamp: parseDateTime(startTime) + durationToSeconds(duration) * 1000
+              durationSeconds,
+              jobName: (jobName || '').trim(),
+              endTimestamp: parseDateTime(startTimeValue) + durationSeconds * 1000
             };
           }).filter((r) => r.jobName && r.startTime !== '1970-01-01 00:00:00');
           return { type: 'timeline', rows };
@@ -790,12 +845,15 @@
 
         for (const event of state.timelineEvents) {
           const job = ensure(event.jobName);
-          const isUptime = (event.productionState || '').toLowerCase() === 'uptime';
+          const isUptime = (event.productionState || '').trim().toLowerCase() === 'uptime';
           if (isUptime) {
             job.timeline.uptimeSeconds += event.durationSeconds;
           } else {
             job.timeline.downtimeSeconds += event.durationSeconds;
-            job.timeline.reasons.set(event.reason, (job.timeline.reasons.get(event.reason) || 0) + event.durationSeconds);
+            const reasonKey = (event.reason || '').trim();
+            if (reasonKey) {
+              job.timeline.reasons.set(reasonKey, (job.timeline.reasons.get(reasonKey) || 0) + event.durationSeconds);
+            }
           }
           if (Number.isFinite(event.startTimestamp)) {
             job.firstSeenTs = Math.min(job.firstSeenTs, event.startTimestamp);
@@ -857,6 +915,7 @@
         renderJobSideDetail(jobs.find((j) => j.jobName === selectedJobName));
         renderCrossSection(selectedJobName);
         renderWeekTimeline(jobs);
+        renderSpeedTab(jobs);
         renderDowntimeReasonsTab(jobs);
         renderDowntimeReasonDetail(jobs);
         renderTabs();
@@ -1226,7 +1285,7 @@
       }
 
       function getEventColorClass(event) {
-        const isUptime = (event.productionState || '').toLowerCase() === 'uptime';
+        const isUptime = (event.productionState || '').trim().toLowerCase() === 'uptime';
         if (isUptime) return 'up';
         const reason = (event.reason || '').toLowerCase();
         return reason === 'readynoproductfeed' ? 'ready' : 'other';
@@ -1438,26 +1497,94 @@
         renderWeekJobModal(selectedWeek.jobs, weekStartMs, weekEndMs);
       }
 
+
+      function shiftSpeedWeekSelection(step) {
+        const options = Array.from(els.speedWeekSelect.options || []);
+        if (options.length === 0) return;
+        const currentIndex = options.findIndex((opt) => opt.value === state.selectedSpeedWeekKey);
+        const from = currentIndex >= 0 ? currentIndex : 0;
+        const next = Math.max(0, Math.min(options.length - 1, from + step));
+        state.selectedSpeedWeekKey = options[next].value;
+        render();
+      }
+
+      function renderSpeedTab(jobs) {
+        const weekMap = new Map();
+        for (const job of jobs) {
+          const baseTs = Number.isFinite(job.firstSeenTs) ? job.firstSeenTs : job.lastSeenTs;
+          if (!Number.isFinite(baseTs)) continue;
+          const weekStartMs = getStartOfWeek(baseTs);
+          const key = String(weekStartMs);
+          if (!weekMap.has(key)) weekMap.set(key, { weekStartMs, jobs: [] });
+          weekMap.get(key).jobs.push(job);
+        }
+
+        const weeks = Array.from(weekMap.values()).sort((a, b) => b.weekStartMs - a.weekStartMs);
+        if (weeks.length === 0) {
+          state.selectedSpeedWeekKey = '';
+          els.speedWeekSelect.innerHTML = '';
+          els.speedWeekBadge.textContent = 'Actieve week: -';
+          els.speedWeekPrevBtn.disabled = true;
+          els.speedWeekNextBtn.disabled = true;
+          els.speedChartArea.innerHTML = '<p class="muted">Nog geen jobs beschikbaar voor snelheidsoverzicht.</p>';
+          return;
+        }
+
+        if (!weeks.some((w) => String(w.weekStartMs) === state.selectedSpeedWeekKey)) {
+          state.selectedSpeedWeekKey = String(weeks[0].weekStartMs);
+        }
+
+        els.speedWeekSelect.innerHTML = weeks
+          .map((w) => `<option value="${w.weekStartMs}">${formatWeekLabel(w.weekStartMs)}</option>`)
+          .join('');
+        els.speedWeekSelect.value = state.selectedSpeedWeekKey;
+
+        const selectedWeek = weeks.find((w) => String(w.weekStartMs) === state.selectedSpeedWeekKey) || weeks[0];
+        const selectedIndex = weeks.findIndex((w) => String(w.weekStartMs) === state.selectedSpeedWeekKey);
+        els.speedWeekPrevBtn.disabled = selectedIndex >= weeks.length - 1;
+        els.speedWeekNextBtn.disabled = selectedIndex <= 0;
+
+        const weekNumber = getIsoWeekNumber(selectedWeek.weekStartMs);
+        els.speedWeekBadge.textContent = `Actieve week: ${weekNumber}`;
+
+        const entries = selectedWeek.jobs
+          .slice()
+          .sort((a, b) => getGoodPerUptimeHour(b) - getGoodPerUptimeHour(a));
+
+        const maxSpeed = Math.max(1, ...entries.map((j) => getGoodPerUptimeHour(j)));
+        els.speedChartArea.innerHTML = entries.length > 0
+          ? entries.map((job) => {
+            const speed = getGoodPerUptimeHour(job);
+            const pct = Math.max(0, Math.min(100, (speed / maxSpeed) * 100));
+            return `<div class="speed-row"><div class="speed-job" title="${job.jobName}">${job.jobName}</div><div class="speed-track"><div class="speed-bar" style="width:${pct.toFixed(2)}%"></div></div><div class="speed-value">${speed.toFixed(1)}/u</div></div>`;
+          }).join('')
+          : '<p class="muted">Geen jobs in deze week.</p>';
+      }
+
       function renderTabs() {
         const active = state.activeTab;
         const showImport = active === 'import';
         const showOverview = active === 'overview';
         const showWeek = active === 'week';
+        const showSpeed = active === 'speed';
         const showDowntime = active === 'downtime';
 
         els.tabImportBtn.classList.toggle('active', showImport);
         els.tabOverviewBtn.classList.toggle('active', showOverview);
         els.tabWeekBtn.classList.toggle('active', showWeek);
+        els.tabSpeedBtn.classList.toggle('active', showSpeed);
         els.tabDowntimeBtn.classList.toggle('active', showDowntime);
 
         els.tabImportBtn.setAttribute('aria-selected', showImport ? 'true' : 'false');
         els.tabOverviewBtn.setAttribute('aria-selected', showOverview ? 'true' : 'false');
         els.tabWeekBtn.setAttribute('aria-selected', showWeek ? 'true' : 'false');
+        els.tabSpeedBtn.setAttribute('aria-selected', showSpeed ? 'true' : 'false');
         els.tabDowntimeBtn.setAttribute('aria-selected', showDowntime ? 'true' : 'false');
 
         els.importTab.classList.toggle('hidden', !showImport);
         els.overviewTab.classList.toggle('hidden', !showOverview);
         els.weekTab.classList.toggle('hidden', !showWeek);
+        els.speedTab.classList.toggle('hidden', !showSpeed);
         els.downtimeTab.classList.toggle('hidden', !showDowntime);
       }
 
