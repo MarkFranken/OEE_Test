@@ -27,6 +27,7 @@ Kleine webapp om `timeline.csv` én `jobstatistics.csv` te laden en machine-effi
 - Klik op een job-rij in de tabel om rechts een detailpaneel te zien met pie-chart (jobduur: uptime/downtime) en downtime-lijst met duur per reden.
 - De efficiëntiebalk in de tabel gebruikt dezelfde kleuren als de pie chart: uptime groen, ReadyNoProductFeed geel, overige downtime rood (van links naar rechts).
 - Er is een extra tab **Week timeline** met per week van links naar rechts de gedraaide jobs en de efficiëntie per job.
+- Er is een extra tab **Snelheid** met per week de gedraaide orders als staafdiagram (good/uur), inclusief weekselectie en vorige/volgende week-knoppen.
 - In de **Week timeline** zie je boven de balken alle weekdagen met datum, het actieve weeknummer en knoppen om naar een week eerder of later te navigeren.
 - In de **Week timeline** staat rechts per job nu ook de tijd-range (van/tot) en de balken kleuren op basis van echte events: uptime groen, ReadyNoProductFeed geel, overige downtime rood; ontbrekende/niet-mapbare stukken worden grijs getoond.
 - Klik op een job in de **Week timeline** om een popup te openen met een uitvergrote job-timeline en eventkleuren van links naar rechts; hover op segmenten toont details (tijd, reden, duur).
