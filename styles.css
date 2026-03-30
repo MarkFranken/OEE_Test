@@ -1,0 +1,135 @@
+:root {
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color-scheme: light;
+  color: #18212f;
+  background: #eef2f7;
+}
+
+body {
+  margin: 0;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+}
+
+h1,
+h2,
+h3 {
+  margin-top: 0;
+}
+
+.panel {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1rem;
+  margin-top: 1rem;
+  box-shadow: 0 2px 10px rgba(20, 35, 59, 0.08);
+}
+
+.uploader {
+  display: grid;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.button {
+  border: none;
+  background: #1768ff;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.button.secondary {
+  background: #425466;
+}
+
+#fileInput {
+  display: none;
+}
+
+.status {
+  margin: 0;
+  color: #425466;
+}
+
+.loaded-files {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+}
+
+.card {
+  background: #f5f8fe;
+  border: 1px solid #dbe4f1;
+  border-radius: 10px;
+  padding: 0.8rem;
+}
+
+.card strong {
+  display: block;
+  font-size: 1.15rem;
+  margin-top: 0.35rem;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid #e5eaf2;
+  padding: 0.55rem;
+}
+
+.progress {
+  width: 100%;
+  height: 12px;
+  background: #f0f2f7;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #2a7bff, #23c29f);
+}
+
+#jobSelect {
+  margin: 0.5rem 0 1rem;
+  padding: 0.5rem;
+}
+
+.reason-row {
+  display: grid;
+  grid-template-columns: 1fr 80px;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.reason-label {
+  font-size: 0.92rem;
+}
+
+.muted {
+  color: #63778c;
+}
