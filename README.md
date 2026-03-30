@@ -26,6 +26,7 @@ Kleine webapp om `timeline.csv` én `jobstatistics.csv` te laden en machine-effi
 - De jobs-tabel ondersteunt filteren (jobnaam / downtime reden) en sorteren (datum, jobnaam, efficiëntie, pieces).
 - In het overzicht toont "Belangrijkste overige downtime oorzaak" bewust niet `ReadyNoProductFeed`, maar de grootste beïnvloedbare overige downtime-reden.
 - Klik op een job-rij in de tabel om rechts een detailpaneel te zien met pie-chart (jobduur: uptime/downtime) en downtime-lijst met duur per reden.
+- Klik op een job in het overzicht om een popup te openen met alle relevante jobinformatie (KPI's, downtime-oorzaken en XML-instellingen).
 - De efficiëntiebalk in de tabel gebruikt dezelfde kleuren als de pie chart: uptime groen, ReadyNoProductFeed geel, overige downtime rood (van links naar rechts).
 - Er is een extra tab **Week timeline** met per week van links naar rechts de gedraaide jobs en de efficiëntie per job.
 - Er is een extra tab **Snelheid** met per week de gedraaide orders als staafdiagram (good/uur), inclusief weekselectie en vorige/volgende week-knoppen.
@@ -41,6 +42,7 @@ Kleine webapp om `timeline.csv` én `jobstatistics.csv` te laden en machine-effi
 - Werkt direct via dubbelklik op `index.html` (zonder bash/server).
 - Het importgedeelte staat in een apart tabblad **Importeren**.
 - Je kunt nu ook order-XML bestanden (bijv. `12389.xml`) importeren; bestandsnaam wordt gematcht met jobnaam en instellingen worden zichtbaar bij de gedraaide order.
+- Alleen jobs die daadwerkelijk gedraaid zijn worden in het overzicht getoond; XML-only jobs zonder run-data blijven verborgen.
 - Het tabblad **Overzicht** is nu de standaard startpagina; **Importeren** staat helemaal rechts in de tabbalk.
 - De pagina gebruikt nu een C-TECH-geïnspireerde huisstijl met logo-link linksboven en uniforme knopstijl (kleur/vorm) over de hele app.
 
